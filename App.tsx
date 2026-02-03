@@ -1,33 +1,29 @@
-import { useState } from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, StyleSheet, Alert } from 'react-native';
-import StatusScreen from './src/screens/StatusScreen';
+// App.tsx
+// Version: 1.0.0 - For testing Step 1 conversion
+// Version: 1.0.1 - Theme Context Integration
+
+import React from 'react';
+import { Alert } from 'react-native';
+import { ThemeProvider } from './src/contexts/ThemeContext';
+import { OnboardingWelcomeScreen } from './src/screens/OnboardingWelcomeScreen';
 
 export default function App() {
-  // Placeholder handlers for now - we'll replace these with real navigation later
-  const handleOpenSettings = () => {
-    Alert.alert('Settings', 'Settings screen coming soon!');
+  const handleCreateHousehold = () => {
+    Alert.alert('Navigation', 'Would navigate to Create Household form');
+    console.log('Create Household clicked');
   };
 
-  const handleOpenNotifications = () => {
-    Alert.alert('Notifications', 'Notifications coming soon!');
+  const handleJoinHousehold = () => {
+    Alert.alert('Navigation', 'Would navigate to Join Household form');
+    console.log('Join Household clicked');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusScreen
-        onOpenSettings={handleOpenSettings}
-        onOpenNotifications={handleOpenNotifications}
+    <ThemeProvider>
+      <OnboardingWelcomeScreen
+        onCreateHousehold={handleCreateHousehold}
+        onJoinHousehold={handleJoinHousehold}
       />
-      <StatusBar style="auto" />
-    </SafeAreaView>
+    </ThemeProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-});
-
