@@ -30,19 +30,22 @@ export function Input({
   const theme = useThemeColors();
   const [isFocused, setIsFocused] = useState(false);
 
+  // Match RW styling: no border, card-like appearance with shadow
+  // Use same border radius as Button (lg) for consistency
   const inputStyle: ViewStyle = {
     backgroundColor: theme.surface,
-    borderWidth: 2,
-    borderColor: error
-      ? theme.error
-      : isFocused
-      ? theme.primary
-      : theme.border,
+    borderWidth: 0,
     borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.base,
     paddingHorizontal: spacing.base,
     fontSize: fontSize.base,
     color: theme.text,
+    // Subtle shadow for depth (matching RW card style)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   };
 
   return (

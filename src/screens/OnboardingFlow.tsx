@@ -224,7 +224,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <View style={styles.content}>
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <Logo size="small" />
+              <Logo size="large" />
             </View>
 
             {/* STEP 1: Welcome Screen */}

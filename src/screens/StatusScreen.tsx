@@ -8,6 +8,7 @@ import {
   ScrollView,
   Image,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -25,17 +26,26 @@ import {
   getHouseholdById,
 } from '../lib/database';
 import { Pet, FeedingEvent, User, Household } from '../lib/types';
-import { formatTime, getTimeAgo, canUndo } from '../lib/time';
+import { formatTime, getTimeAgo, canUndo, formatDateHeader } from '../lib/time';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface StyledStatusScreenProps {
   onOpenSettings: () => void;
   onOpenNotifications: () => void;
 }
 
+interface HistoryEventDetails {
+  event: FeedingEvent;
+  petNames: string[];
+  userName: string;
+}
+
 export function StyledStatusScreen({
   onOpenSettings,
   onOpenNotifications,
 }: StyledStatusScreenProps) {
+  const { isDark, theme } = useTheme();
+
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
   const [feedAllSelected, setFeedAllSelected] = useState(true);
@@ -45,6 +55,36 @@ export function StyledStatusScreen({
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [household, setHousehold] = useState<Household | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // State for async data
+  const [latestEvent, setLatestEvent] = useState<FeedingEvent | null>(null);
+  const [undoInfo, setUndoInfo] = useState<{ canUndo: boolean; eventId?: string }>({ canUndo: false });
+
+  // New state for enhanced features
+  const [latestEventDetails, setLatestEventDetails] = useState<{
+    petNames: string[];
+    userName: string;
+  } | null>(null);
+  const [historyEvents, setHistoryEvents] = useState<HistoryEventDetails[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
+  // Helper function to resolve event details
+  const resolveEventDetails = async (event: FeedingEvent): Promise<{
+    petNames: string[];
+    userName: string;
+  }> => {
+    const petNames = await Promise.all(
+      event.PetIDs.map(async (petId) => {
+        const pet = await getPetById(petId);
+        return pet?.PetName || 'Unknown Pet';
+      })
+    );
+
+    const user = await getUserById(event.UserID);
+    const userName = user?.MemberName || 'Unknown';
+
+    return { petNames, userName };
+  };
 
   // Load data
   useEffect(() => {
@@ -166,7 +206,7 @@ export function StyledStatusScreen({
   // Get the most recent feeding event for the status card
   const getLatestFeedingEvent = async (): Promise<FeedingEvent | null> => {
     if (!currentHouseholdId) return null;
-    
+
     try {
       const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
       return events.length > 0 ? events[0] : null;
@@ -179,14 +219,14 @@ export function StyledStatusScreen({
   // Check if latest feeding event can be undone
   const canUndoLatest = async (): Promise<{ canUndo: boolean; eventId?: string }> => {
     if (!currentHouseholdId) return { canUndo: false };
-    
+
     try {
       const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
       if (events.length === 0) return { canUndo: false };
-      
+
       const latestEvent = events[0];
       if (!latestEvent.UndoDeadline) return { canUndo: false };
-      
+
       const now = new Date();
       const deadline = new Date(latestEvent.UndoDeadline);
       return {
@@ -199,18 +239,38 @@ export function StyledStatusScreen({
     }
   };
 
-  // State for async data
-  const [latestEvent, setLatestEvent] = useState<FeedingEvent | null>(null);
-  const [undoInfo, setUndoInfo] = useState<{ canUndo: boolean; eventId?: string }>({ canUndo: false });
-
-  // Load async data
+  // Load async data including history
   useEffect(() => {
     const loadAsyncData = async () => {
       const event = await getLatestFeedingEvent();
       setLatestEvent(event);
-      
+
+      // Load latest event details
+      if (event) {
+        const details = await resolveEventDetails(event);
+        setLatestEventDetails(details);
+      } else {
+        setLatestEventDetails(null);
+      }
+
       const undo = await canUndoLatest();
       setUndoInfo(undo);
+
+      // Load feeding history
+      if (currentHouseholdId) {
+        try {
+          const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
+          const eventsWithDetails = await Promise.all(
+            events.slice(0, 30).map(async (evt) => {
+              const details = await resolveEventDetails(evt);
+              return { event: evt, ...details };
+            })
+          );
+          setHistoryEvents(eventsWithDetails);
+        } catch (error) {
+          console.error('Error loading history:', error);
+        }
+      }
     };
 
     if (currentHouseholdId) {
@@ -218,18 +278,22 @@ export function StyledStatusScreen({
     }
   }, [currentHouseholdId, pets]); // Reload when pets change (after feeding)
 
+  // Determine visible history based on tier
+  const visibleHistory = isPro ? historyEvents.slice(0, 5) : historyEvents.slice(0, 1);
+  const hasMoreHistory = isPro && historyEvents.length > 5;
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
@@ -238,13 +302,16 @@ export function StyledStatusScreen({
             style={styles.menuButton}
             activeOpacity={0.6}
           >
-            <Ionicons name="menu" size={28} color="#333" />
+            <Ionicons name="menu" size={28} color={theme.text} />
           </TouchableOpacity>
 
-          {/* Logo - Updated to use actual image */}
+          {/* Logo - Theme-aware */}
           <View style={styles.logoContainer}>
             <Image
-              source={require('../../assets/IFTP_Logo_Black_text.png')}
+              source={isDark
+                ? require('../../assets/IFTP_Logo_White_text.png')
+                : require('../../assets/IFTP_Logo_Black_text.png')
+              }
               style={styles.logoImage}
               resizeMode="contain"
             />
@@ -256,9 +323,9 @@ export function StyledStatusScreen({
             style={styles.notificationButton}
             activeOpacity={0.6}
           >
-            <Ionicons name="notifications-outline" size={24} color="#333" />
+            <Ionicons name="notifications-outline" size={24} color={theme.text} />
             {unreadCount > 0 && (
-              <View style={styles.notificationBadge}>
+              <View style={[styles.notificationBadge, { backgroundColor: theme.primary }]}>
                 <Text style={styles.notificationBadgeText}>
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </Text>
@@ -269,47 +336,63 @@ export function StyledStatusScreen({
 
         {/* Household Name */}
         {household && (
-          <Text style={styles.householdName}>{household.HouseholdName}</Text>
+          <Text style={[styles.householdName, { color: theme.textTertiary }]}>
+            {household.HouseholdName}
+          </Text>
         )}
 
         {/* Status Card */}
-        <View style={styles.statusCard}>
+        <View style={[styles.statusCard, { backgroundColor: theme.surface }]}>
           {latestEvent ? (
             <>
-              <Text style={styles.statusLabel}>LAST FED</Text>
+              <Text style={[styles.statusLabel, { color: theme.primary }]}>LAST FED</Text>
               <View style={styles.timeDisplay}>
-                <Text style={styles.timeText}>
+                <Text style={[styles.timeText, { color: theme.text }]}>
                   {formatTime(new Date(latestEvent.Timestamp).getTime())}
                 </Text>
               </View>
-              <Text style={styles.timeAgo}>
+              {latestEventDetails && (
+                <>
+                  <Text style={[styles.petNamesText, { color: theme.text }]}>
+                    {latestEventDetails.petNames.join(', ')}
+                  </Text>
+                  <Text style={[styles.fedByText, { color: theme.textSecondary }]}>
+                    Fed by {latestEventDetails.userName}
+                  </Text>
+                </>
+              )}
+              <Text style={[styles.timeAgo, { color: theme.textTertiary }]}>
                 {getTimeAgo(new Date(latestEvent.Timestamp).getTime())}
               </Text>
             </>
           ) : (
             <>
-              <Text style={styles.statusLabel}>LAST FED</Text>
+              <Text style={[styles.statusLabel, { color: theme.primary }]}>LAST FED</Text>
               <View style={styles.timeDisplay}>
-                <Text style={styles.timeText}>- - : - -</Text>
+                <Text style={[styles.timeText, { color: theme.text }]}>- - : - -</Text>
               </View>
-              <Text style={styles.timeAgo}>Never fed</Text>
+              <Text style={[styles.timeAgo, { color: theme.textTertiary }]}>Never fed</Text>
             </>
           )}
         </View>
 
         {/* Pet Checkboxes (Pro only, multiple pets) */}
         {isPro && pets.length > 1 && (
-          <View style={styles.petCheckboxContainer}>
+          <View style={[styles.petCheckboxContainer, { backgroundColor: theme.surface }]}>
             {/* Feed All checkbox */}
             <TouchableOpacity
               onPress={handleFeedAllToggle}
               style={styles.checkboxRow}
               activeOpacity={0.7}
             >
-              <View style={[styles.checkbox, feedAllSelected && styles.checkboxChecked]}>
+              <View style={[
+                styles.checkbox,
+                { borderColor: theme.border },
+                feedAllSelected && { backgroundColor: theme.primary, borderColor: theme.primary }
+              ]}>
                 {feedAllSelected && <Ionicons name="checkmark" size={16} color="white" />}
               </View>
-              <Text style={styles.checkboxLabel}>Feed all</Text>
+              <Text style={[styles.checkboxLabel, { color: theme.text }]}>Feed all</Text>
             </TouchableOpacity>
 
             {/* Individual pet checkboxes */}
@@ -322,13 +405,17 @@ export function StyledStatusScreen({
               >
                 <View style={[
                   styles.checkbox,
-                  !feedAllSelected && selectedPetIds.includes(pet.PetID) && styles.checkboxChecked
+                  { borderColor: theme.border },
+                  !feedAllSelected && selectedPetIds.includes(pet.PetID) && {
+                    backgroundColor: theme.primary,
+                    borderColor: theme.primary
+                  }
                 ]}>
                   {!feedAllSelected && selectedPetIds.includes(pet.PetID) && (
                     <Ionicons name="checkmark" size={16} color="white" />
                   )}
                 </View>
-                <Text style={styles.checkboxLabel}>{pet.PetName}</Text>
+                <Text style={[styles.checkboxLabel, { color: theme.text }]}>{pet.PetName}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -338,7 +425,7 @@ export function StyledStatusScreen({
         <View style={styles.feedButtonContainer}>
           <TouchableOpacity
             onPress={handleFeedClick}
-            style={styles.feedButton}
+            style={[styles.feedButton, { backgroundColor: theme.primary }]}
             activeOpacity={0.8}
           >
             <Text style={styles.feedButtonText}>I FED THE PET</Text>
@@ -350,27 +437,173 @@ export function StyledStatusScreen({
               style={styles.undoButton}
               activeOpacity={0.7}
             >
-              <Text style={styles.undoButtonText}>Undo (available for 2 minutes)</Text>
+              <Text style={[styles.undoButtonText, { color: theme.textTertiary }]}>
+                Undo (available for 2 minutes)
+              </Text>
             </TouchableOpacity>
           )}
         </View>
 
+        {/* Feeding History Section */}
+        {historyEvents.length > 0 && (
+          <View style={styles.historySection}>
+            <Text style={[styles.historyHeader, { color: theme.textTertiary }]}>RECENT</Text>
+
+            {/* Visible history entries */}
+            {visibleHistory.map((item) => (
+              <View
+                key={item.event.EventID}
+                style={[styles.historyEntry, { backgroundColor: theme.surface }]}
+              >
+                <View style={styles.historyEntryLeft}>
+                  <Text style={[styles.historyEntryTime, { color: theme.text }]}>
+                    {formatTime(new Date(item.event.Timestamp).getTime())}
+                  </Text>
+                  <Text style={[styles.historyEntryFedBy, { color: theme.textSecondary }]}>
+                    {item.userName} fed...
+                  </Text>
+                  <Text style={[styles.historyEntryPets, { color: theme.textSecondary }]}>
+                    {item.petNames.join(', ')}
+                  </Text>
+                </View>
+                <Text style={[styles.historyEntryTimeAgo, { color: theme.textTertiary }]}>
+                  {getTimeAgo(new Date(item.event.Timestamp).getTime())}
+                </Text>
+              </View>
+            ))}
+
+            {/* Pro: VIEW ALL button */}
+            {hasMoreHistory && (
+              <TouchableOpacity
+                onPress={() => setShowHistoryModal(true)}
+                style={[styles.viewAllButton, { backgroundColor: theme.surface }]}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.viewAllText, { color: theme.primary }]}>VIEW ALL</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Free: Blurred entries with upgrade overlay */}
+            {!isPro && historyEvents.length > 1 && (
+              <View style={styles.blurredHistoryContainer}>
+                {/* Blurred preview entries */}
+                {historyEvents.slice(1, 3).map((item) => (
+                  <View
+                    key={`blurred-${item.event.EventID}`}
+                    style={[styles.historyEntry, styles.blurredEntry, { backgroundColor: theme.surface }]}
+                  >
+                    <View style={styles.historyEntryLeft}>
+                      <Text style={[styles.historyEntryTime, { color: theme.text }]}>
+                        {formatTime(new Date(item.event.Timestamp).getTime())}
+                      </Text>
+                      <Text style={[styles.historyEntryFedBy, { color: theme.textSecondary }]}>
+                        {item.userName} fed...
+                      </Text>
+                    </View>
+                    <Text style={[styles.historyEntryTimeAgo, { color: theme.textTertiary }]}>
+                      {getTimeAgo(new Date(item.event.Timestamp).getTime())}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Upgrade overlay */}
+                <View style={[styles.upgradeOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.85)' }]}>
+                  <TouchableOpacity
+                    onPress={onOpenSettings}
+                    style={[styles.upgradeOverlayButton, { backgroundColor: theme.primary }]}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.upgradeOverlayButtonText}>
+                      Upgrade to see 30 days history
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Advertisement and Upgrade (Free tier only) */}
         {!isPro && (
           <View style={styles.upgradeSection}>
-            <View style={styles.adBanner}>
-              <Text style={styles.adText}>Advertisement</Text>
+            <View style={[styles.adBanner, { backgroundColor: theme.surface }]}>
+              <Text style={[styles.adText, { color: theme.textTertiary }]}>Advertisement</Text>
             </View>
             <TouchableOpacity
               onPress={onOpenSettings}
-              style={styles.upgradeButton}
+              style={styles.upgradeLinkButton}
               activeOpacity={0.7}
             >
-              <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+              <Text style={[styles.upgradeLinkText, { color: theme.textTertiary }]}>
+                Upgrade to Pro
+              </Text>
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
+
+      {/* Full History Modal - Pro users only */}
+      {isPro && (
+        <Modal
+          visible={showHistoryModal}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowHistoryModal(false)}
+        >
+          <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+            {/* Modal Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Feeding History</Text>
+              <TouchableOpacity
+                onPress={() => setShowHistoryModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal Content */}
+            <ScrollView style={styles.modalScrollView}>
+              {historyEvents.map((item, index) => {
+                const eventDate = new Date(item.event.Timestamp);
+                const prevEventDate = index > 0
+                  ? new Date(historyEvents[index - 1].event.Timestamp)
+                  : null;
+                const isNewDay = !prevEventDate ||
+                  eventDate.toDateString() !== prevEventDate.toDateString();
+
+                return (
+                  <View key={item.event.EventID}>
+                    {isNewDay && (
+                      <Text style={[styles.modalDateHeader, { color: theme.textSecondary }]}>
+                        {formatDateHeader(eventDate)}
+                      </Text>
+                    )}
+                    <View style={[styles.modalHistoryItem, { borderBottomColor: theme.border }]}>
+                      <View style={styles.modalHistoryItemLeft}>
+                        <Text style={[styles.modalHistoryTime, { color: theme.text }]}>
+                          {formatTime(eventDate.getTime())}
+                        </Text>
+                        <Text style={[styles.modalHistoryFedBy, { color: theme.textSecondary }]}>
+                          Fed by {item.userName}
+                        </Text>
+                      </View>
+                      <View style={styles.modalHistoryItemRight}>
+                        <Text style={[styles.modalHistoryPets, { color: theme.text }]}>
+                          {item.petNames.join(', ')}
+                        </Text>
+                        <Text style={[styles.modalHistoryTimeAgo, { color: theme.textTertiary }]}>
+                          {getTimeAgo(eventDate.getTime())}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -378,7 +611,6 @@ export function StyledStatusScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f7fc', // Light purple background like Dan's design
   },
   loadingContainer: {
     flex: 1,
@@ -387,7 +619,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#666',
   },
   scrollContainer: {
     flex: 1,
@@ -398,7 +629,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     alignItems: 'center',
   },
-  
+
   // Header
   header: {
     width: '100%',
@@ -415,13 +646,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -40, // Compensate for notification button to center logo
+    marginLeft: -40,
   },
-  // Updated logo styling - replaces logoIcon, logoEmoji, logoText
   logoImage: {
-    height: 22.4, // Matches web version exactly
-    width: 140, // Approximate width for horizontal logo
-    resizeMode: 'contain',
+    height: 22.4,
+    width: 140,
   },
   notificationButton: {
     padding: 8,
@@ -431,7 +660,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     right: 4,
-    backgroundColor: '#fb314a',
     borderRadius: 10,
     minWidth: 20,
     height: 20,
@@ -448,22 +676,17 @@ const styles = StyleSheet.create({
   // Household Name
   householdName: {
     fontSize: 14,
-    color: '#999',
     marginBottom: 32,
   },
 
   // Status Card
   statusCard: {
-    backgroundColor: 'white',
     borderRadius: 16,
     padding: 32,
     alignItems: 'center',
     marginBottom: 32,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
@@ -473,7 +696,6 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#fb314a',
     letterSpacing: 2,
     marginBottom: 16,
   },
@@ -483,26 +705,32 @@ const styles = StyleSheet.create({
   timeText: {
     fontSize: 48,
     fontWeight: '600',
-    color: '#333',
     textAlign: 'center',
+  },
+  petNamesText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  fedByText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 4,
   },
   timeAgo: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
+    marginTop: 8,
   },
 
   // Pet Checkboxes
   petCheckboxContainer: {
-    backgroundColor: 'white',
     borderRadius: 16,
     padding: 16,
     marginBottom: 32,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
@@ -519,18 +747,12 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4,
     borderWidth: 2,
-    borderColor: '#ddd',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  checkboxChecked: {
-    backgroundColor: '#fb314a',
-    borderColor: '#fb314a',
-  },
   checkboxLabel: {
     fontSize: 16,
-    color: '#333',
     fontWeight: '500',
   },
 
@@ -543,14 +765,10 @@ const styles = StyleSheet.create({
     width: 192,
     height: 192,
     borderRadius: 96,
-    backgroundColor: '#fb314a',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#fb314a',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
@@ -569,8 +787,94 @@ const styles = StyleSheet.create({
   },
   undoButtonText: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
+  },
+
+  // History Section
+  historySection: {
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 24,
+  },
+  historyHeader: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 2,
+    marginBottom: 12,
+  },
+  historyEntry: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  historyEntryLeft: {
+    flex: 1,
+  },
+  historyEntryTime: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  historyEntryFedBy: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyEntryPets: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  historyEntryTimeAgo: {
+    fontSize: 12,
+    marginLeft: 12,
+  },
+  blurredEntry: {
+    opacity: 0.4,
+  },
+  blurredHistoryContainer: {
+    position: 'relative',
+  },
+  upgradeOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+  },
+  upgradeOverlayButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+  },
+  upgradeOverlayButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  viewAllButton: {
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1,
   },
 
   // Upgrade Section
@@ -580,15 +884,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   adBanner: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
@@ -597,15 +897,72 @@ const styles = StyleSheet.create({
   },
   adText: {
     fontSize: 12,
-    color: '#999',
   },
-  upgradeButton: {
+  upgradeLinkButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
-  upgradeButtonText: {
+  upgradeLinkText: {
     fontSize: 14,
-    color: '#999',
     textAlign: 'center',
+  },
+
+  // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalScrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  modalDateHeader: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  modalHistoryItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  modalHistoryItemLeft: {
+    flex: 1,
+  },
+  modalHistoryItemRight: {
+    alignItems: 'flex-end',
+  },
+  modalHistoryTime: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalHistoryFedBy: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalHistoryPets: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalHistoryTimeAgo: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });
