@@ -241,12 +241,13 @@ export function StyledStatusScreen({
             <Ionicons name="menu" size={28} color="#333" />
           </TouchableOpacity>
 
-          {/* Logo */}
+          {/* Logo - Updated to use actual image */}
           <View style={styles.logoContainer}>
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoEmoji}>ðŸ¾</Text>
-            </View>
-            <Text style={styles.logoText}>I Fed the Pet</Text>
+            <Image
+              source={require('../../assets/IFTP_Logo_Black_text.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
 
           {/* Notifications */}
@@ -411,28 +412,16 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   logoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     marginLeft: -40, // Compensate for notification button to center logo
   },
-  logoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#fb314a',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  logoEmoji: {
-    fontSize: 18,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+  // Updated logo styling - replaces logoIcon, logoEmoji, logoText
+  logoImage: {
+    height: 22.4, // Matches web version exactly
+    width: 140, // Approximate width for horizontal logo
+    resizeMode: 'contain',
   },
   notificationButton: {
     padding: 8,
