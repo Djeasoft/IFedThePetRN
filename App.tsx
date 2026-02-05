@@ -1,29 +1,76 @@
-// App.tsx
+// App.tsx - Main Entry Point
 // Version: 1.0.0 - For testing Step 1 conversion
 // Version: 1.0.1 - Theme Context Integration
+// Version: 2.0.0 - Complete Onboarding Flow
 
-import React from 'react';
-import { Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { ThemeProvider } from './src/contexts/ThemeContext';
-import { OnboardingWelcomeScreen } from './src/screens/OnboardingWelcomeScreen';
+import { OnboardingFlow } from './src/screens/OnboardingFlow';
+import { StyledStatusScreen } from './src/screens/StatusScreen';
+import { isOnboardingCompleted } from './src/lib/database';
 
 export default function App() {
-  const handleCreateHousehold = () => {
-    Alert.alert('Navigation', 'Would navigate to Create Household form');
-    console.log('Create Household clicked');
+  const [loading, setLoading] = useState(true);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+
+  // Check onboarding status on mount
+  useEffect(() => {
+    checkOnboardingStatus();
+  }, []);
+
+  const checkOnboardingStatus = async () => {
+    try {
+      const completed = await isOnboardingCompleted();
+      setOnboardingComplete(completed);
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleJoinHousehold = () => {
-    Alert.alert('Navigation', 'Would navigate to Join Household form');
-    console.log('Join Household clicked');
+  const handleOnboardingComplete = () => {
+    setOnboardingComplete(true);
   };
+
+  const handleOpenSettings = () => {
+    console.log('Settings button pressed');
+    // TODO: Navigate to settings screen
+  };
+
+  const handleOpenNotifications = () => {
+    console.log('Notifications button pressed');
+    // TODO: Navigate to notifications panel
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#fb314a" />
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider>
-      <OnboardingWelcomeScreen
-        onCreateHousehold={handleCreateHousehold}
-        onJoinHousehold={handleJoinHousehold}
-      />
+      {onboardingComplete ? (
+        <StyledStatusScreen
+          onOpenSettings={handleOpenSettings}
+          onOpenNotifications={handleOpenNotifications}
+        />
+      ) : (
+        <OnboardingFlow onComplete={handleOnboardingComplete} />
+      )}
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f7fc',
+  },
+});
