@@ -12,12 +12,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import {
   getCurrentUserId,
-  getHouseholdsForUserId,
+  getHouseholdsForUser,
   getPetsByHouseholdId,
   feedPet,
   getUserById,
   addNotification,
-  getUnreadNotificationCount,
+  getUnreadNotificationsCount,
   addFeedingEvent,
   getFeedingEventsByHouseholdId,
   undoFeedingEvent,
@@ -64,7 +64,7 @@ export function StyledStatusScreen({
       const user = await getUserById(userId);
       setCurrentUser(user);
 
-      const households = await getHouseholdsForUserId(userId);
+      const households = await getHouseholdsForUser(userId);
       if (households.length === 0) {
         setLoading(false);
         return;
@@ -79,7 +79,7 @@ export function StyledStatusScreen({
       setPets(householdPets);
 
       // Update unread notification count
-      const count = await getUnreadNotificationCount();
+      const count = await getUnreadNotificationsCount();
       setUnreadCount(count);
 
       setLoading(false);

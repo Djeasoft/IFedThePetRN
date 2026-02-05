@@ -8,7 +8,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { OnboardingFlow } from './src/screens/OnboardingFlow';
 import { StyledStatusScreen } from './src/screens/StatusScreen';
-import { isOnboardingCompleted } from './src/lib/database';
+import { isOnboardingCompleted, resetOnboarding } from './src/lib/database';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,9 @@ export default function App() {
 
   const checkOnboardingStatus = async () => {
     try {
+      // TODO: Remove this line after testing onboarding
+      await resetOnboarding();
+
       const completed = await isOnboardingCompleted();
       setOnboardingComplete(completed);
     } catch (error) {

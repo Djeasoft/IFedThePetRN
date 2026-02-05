@@ -20,6 +20,7 @@ import {
   getAllUsers,
   feedPet,
   undoFeedPet,
+  resetOnboarding,
 } from '../lib/database';
 import type { User, Household, Pet } from '../lib/types';
 
@@ -110,6 +111,20 @@ export default function TestDataScreen() {
     }
   };
 
+  // Reset onboarding
+  const handleResetOnboarding = async () => {
+    setLoading(true);
+    setLastAction('Resetting onboarding...');
+    try {
+      await resetOnboarding();
+      setLastAction('✅ Onboarding reset - restart app to see onboarding flow');
+    } catch (error) {
+      setLastAction(`❌ Error: ${error}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Load data on mount
   useEffect(() => {
     loadData();
@@ -156,6 +171,14 @@ export default function TestDataScreen() {
           disabled={loading || pets.length === 0}
         >
           <Text style={styles.buttonText}>Undo Feed</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.resetButton]}
+          onPress={handleResetOnboarding}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Reset Onboarding</Text>
         </TouchableOpacity>
       </View>
 
@@ -290,6 +313,9 @@ const styles = StyleSheet.create({
   },
   undoButton: {
     backgroundColor: '#FF9500',
+  },
+  resetButton: {
+    backgroundColor: '#FF3B30',
   },
   buttonText: {
     color: '#FFFFFF',
