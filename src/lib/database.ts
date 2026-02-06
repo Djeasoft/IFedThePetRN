@@ -1,7 +1,6 @@
-// Database layer using AsyncStorage for React Native
+// database.ts
 // Version: 1.0.0 - React Native
-// Converted from localStorage (web) to AsyncStorage (mobile)
-// In production, this would interface with Supabase
+// Version: 2.0.0 - Converted from localStorage (web) to AsyncStorage (mobile)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, Household, UserHousehold, Pet, Notification, FeedingEvent, FeedReminder, UNDO_WINDOW_MS } from './types';
