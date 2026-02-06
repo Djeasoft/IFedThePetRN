@@ -24,6 +24,7 @@ import {
   undoFeedingEvent,
   getPetById,
   getHouseholdById,
+  subscribeToHouseholdChanges,
 } from '../lib/database';
 import { Pet, FeedingEvent, User, Household } from '../lib/types';
 import { formatTime, getTimeAgo, canUndo, formatDateHeader } from '../lib/time';
@@ -73,33 +74,27 @@ export function StyledStatusScreen({
     petNames: string[];
     userName: string;
   }> => {
-    const petNames = await Promise.all(
+    // Use the new PetNames field from the event if it exists, 
+    // or fall back to looking them up for older records
+    const petNames = event.PetNames ? event.PetNames.split(', ') : await Promise.all(
       event.PetIDs.map(async (petId) => {
         const pet = await getPetById(petId);
         return pet?.PetName || 'Unknown Pet';
       })
     );
 
-    const user = await getUserById(event.UserID);
-    const userName = user?.MemberName || 'Unknown';
+    // Use the new FedByMemberName field or look up the user
+    const userName = event.FedByMemberName || (await getUserById(event.FedByUserID))?.MemberName || 'Unknown';
 
-    return { petNames, userName };
+    return { petNames: Array.isArray(petNames) ? petNames : [petNames], userName };
   };
 
   // Load data
-  useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 1000); // Update every second for undo countdown
-    return () => clearInterval(interval);
-  }, []);
-
+  // 1. Unified Loading Function
   const loadData = async () => {
     try {
       const userId = await getCurrentUserId();
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
+      if (!userId) return;
 
       const user = await getUserById(userId);
       setCurrentUser(user);
@@ -110,24 +105,73 @@ export function StyledStatusScreen({
         return;
       }
 
-      const currentHousehold = households[0]; // Use first household for now
+      const currentHousehold = households[0];
       setHousehold(currentHousehold);
       setCurrentHouseholdId(currentHousehold.HouseholdID);
       setIsPro(currentHousehold.IsSubscriptionPro);
 
-      const householdPets = await getPetsByHouseholdId(currentHousehold.HouseholdID);
-      setPets(householdPets);
+      // Fetch Pets and History together
+      const [householdPets, events, count] = await Promise.all([
+        getPetsByHouseholdId(currentHousehold.HouseholdID),
+        getFeedingEventsByHouseholdId(currentHousehold.HouseholdID),
+        getUnreadNotificationsCount()
+      ]);
 
-      // Update unread notification count
-      const count = await getUnreadNotificationsCount();
+      setPets(householdPets);
       setUnreadCount(count);
 
-      setLoading(false);
+      // Update the Latest Event and History list
+      if (events.length > 0) {
+        const latest = events[0];
+        setLatestEvent(latest);
+
+        // Resolve names for the latest event
+        const details = await resolveEventDetails(latest);
+        setLatestEventDetails(details);
+
+        // Resolve names for the history list (up to 30)
+        const eventsWithDetails = await Promise.all(
+          events.slice(0, 30).map(async (evt) => {
+            const details = await resolveEventDetails(evt);
+            return { event: evt, ...details };
+          })
+        );
+        setHistoryEvents(eventsWithDetails);
+      } else {
+        setLatestEvent(null);
+        setLatestEventDetails(null);
+        setHistoryEvents([]);
+      }
+
     } catch (error) {
       console.error('Error loading data:', error);
+    } finally {
       setLoading(false);
     }
   };
+
+  // 2. Simplified Lifecycle Effects
+  useEffect(() => {
+    loadData();
+
+    // Timer for the "Undo" window
+    const interval = setInterval(() => {
+      canUndoLatest().then(setUndoInfo);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Real-time listener
+  useEffect(() => {
+    if (!currentHouseholdId) return;
+
+    const unsubscribe = subscribeToHouseholdChanges(currentHouseholdId, () => {
+      loadData(); // This now refreshes everything, including Last Fed time
+    });
+
+    return () => unsubscribe();
+  }, [currentHouseholdId]);
 
   // Handle pet selection
   const handlePetToggle = (petId: string) => {
@@ -162,27 +206,30 @@ export function StyledStatusScreen({
 
     try {
       const now = new Date().toISOString();
+      const petNames = petsToFeed.map((p) => p.PetName).join(', ');
 
-      // Feed selected pets
+      // 1. Update individual pet statuses in Supabase
       for (const pet of petsToFeed) {
         await feedPet(pet.PetID, currentUser.UserID);
       }
 
-      // Create ONE feeding event for all pets fed together
+      // 2. Create the shared Feeding Event history
       await addFeedingEvent({
         HouseholdID: currentHouseholdId,
-        UserID: currentUser.UserID,
+        FedByUserID: currentUser.UserID,      // Renamed to match types.ts
+        FedByMemberName: currentUser.MemberName, // Added new required field
         PetIDs: petsToFeed.map((p) => p.PetID),
+        PetNames: petNames,                   // Added new required field
         Timestamp: now,
-        UndoDeadline: null, // Will be set automatically
+        UndoDeadline: null,
       });
 
-      // Create notification
-      const petNames = petsToFeed.map((p) => p.PetName).join(', ');
+      // 3. Create the in-app Notification
       await addNotification({
         type: 'feeding',
         message: `${currentUser.MemberName} fed...\n${petNames}`,
         petName: petNames,
+        read: false, // This fixes the "Property 'read' is missing" error
       });
 
       loadData();
@@ -241,42 +288,31 @@ export function StyledStatusScreen({
 
   // Load async data including history
   useEffect(() => {
-    const loadAsyncData = async () => {
-      const event = await getLatestFeedingEvent();
-      setLatestEvent(event);
+    // 1. Initial data load
+    loadData();
 
-      // Load latest event details
-      if (event) {
-        const details = await resolveEventDetails(event);
-        setLatestEventDetails(details);
-      } else {
-        setLatestEventDetails(null);
-      }
+    // 2. Set up the 1-second interval ONLY for the "Undo" timer
+    const interval = setInterval(() => {
+      // We only need to check the timer, not reload all data every second
+      canUndoLatest().then(setUndoInfo);
+    }, 1000);
 
-      const undo = await canUndoLatest();
-      setUndoInfo(undo);
+    return () => clearInterval(interval);
+  }, []);
 
-      // Load feeding history
-      if (currentHouseholdId) {
-        try {
-          const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
-          const eventsWithDetails = await Promise.all(
-            events.slice(0, 30).map(async (evt) => {
-              const details = await resolveEventDetails(evt);
-              return { event: evt, ...details };
-            })
-          );
-          setHistoryEvents(eventsWithDetails);
-        } catch (error) {
-          console.error('Error loading history:', error);
-        }
-      }
-    };
+  // Add a NEW useEffect to handle the Realtime subscription
+  useEffect(() => {
+    if (!currentHouseholdId) return;
 
-    if (currentHouseholdId) {
-      loadAsyncData();
-    }
-  }, [currentHouseholdId, pets]); // Reload when pets change (after feeding)
+    // Start listening for changes in the cloud
+    const unsubscribe = subscribeToHouseholdChanges(currentHouseholdId, () => {
+      loadData(); // Reload everything when the cloud changes
+    });
+
+    // Stop listening if the component disappears
+    return () => unsubscribe();
+  }, [currentHouseholdId]);
+  // Reload when pets change (after feeding)
 
   // Determine visible history based on tier
   const visibleHistory = isPro ? historyEvents.slice(0, 5) : historyEvents.slice(0, 1);

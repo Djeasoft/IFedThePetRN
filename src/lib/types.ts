@@ -1,21 +1,20 @@
 // Data types based on ERD specification
-// Version: 1.0.0 - React Native (no changes from web version)
+// Version: 1.1.0 - Updated with Supabase history fields
 
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
 export interface User {
-  UserID: string; // Primary key
+  UserID: string; 
   UUID: string;
   MemberName: string;
   EmailAddress: string;
   IsMainMember: boolean;
   InvitationStatus: InvitationStatus;
   NotificationPreferences?: NotificationPreferences;
-  DateCreated: string; // ISO string
-  DateUpdated: string; // ISO string
+  DateCreated: string;
+  DateUpdated: string;
 }
 
-// Notification preferences
 export interface NotificationPreferences {
   feedingNotifications: boolean;
   memberJoinedNotifications: boolean;
@@ -24,38 +23,36 @@ export interface NotificationPreferences {
 }
 
 export interface Household {
-  HouseholdID: string; // Primary key
+  HouseholdID: string;
   UUID: string;
   HouseholdName: string;
   InvitationCode: string;
-  MainMemberID: string; // Foreign key to User
+  MainMemberID: string;
   IsSubscriptionPro: boolean;
-  DateCreated: string; // ISO string
-  DateUpdated: string; // ISO string
+  DateCreated: string;
+  DateUpdated: string;
 }
 
-// Junction table - links users to households
 export interface UserHousehold {
   UserHouseholdID: string;
   UserID: string;
   HouseholdID: string;
-  DateJoined: string; // ISO string
-  ReceivesReminders: boolean; // Whether this member receives feed reminders
+  DateJoined: string;
+  ReceivesReminders: boolean;
 }
 
 export interface Pet {
-  PetID: string; // Primary key
+  PetID: string;
   UUID: string;
   PetName: string;
-  HouseholdID: string; // Foreign key to Household
-  LastFedDateTime: string | null; // ISO string or null
-  LastFedByUserID: string | null; // Foreign key to User or null
-  UndoDeadline: string | null; // ISO string or null
-  DateCreated: string; // ISO string
-  DateUpdated: string; // ISO string
+  HouseholdID: string;
+  LastFedDateTime: string | null;
+  LastFedByUserID: string | null;
+  UndoDeadline: string | null;
+  DateCreated: string;
+  DateUpdated: string;
 }
 
-// Notification type for in-app notifications
 export interface Notification {
   id: string;
   type: 'feeding' | 'member_joined' | 'pet_added' | 'member_removed' | 'feed_request';
@@ -64,37 +61,37 @@ export interface Notification {
   read: boolean;
   petName?: string;
   memberName?: string;
-  requestedBy?: string; // Name of the person who requested the feeding
+  requestedBy?: string;
 }
 
-// Feeding event - tracks when pets are fed (for grouped history)
+// Updated FeedingEvent to match Supabase schema
 export interface FeedingEvent {
   EventID: string;
   HouseholdID: string;
-  UserID: string; // Who fed the pets
-  PetIDs: string[]; // Array of pet IDs that were fed
-  Timestamp: string; // ISO string
-  UndoDeadline: string | null; // ISO string or null
+  FedByUserID: string;
+  FedByMemberName: string;
+  PetIDs: string[];
+  PetNames: string;
+  Timestamp: string;
+  UndoDeadline: string | null;
 }
 
-// Feed Reminder - scheduled reminders to feed pets
 export interface FeedReminder {
   ReminderID: string;
   HouseholdID: string;
-  Title: string; // e.g., "Feed the dogs"
-  Time: string; // HH:mm format (e.g., "06:00", "18:30")
+  Title: string;
+  Time: string;
   IsActive: boolean;
-  DateCreated: string; // ISO string
-  DateUpdated: string; // ISO string
+  DateCreated: string;
+  DateUpdated: string;
 }
 
-// Business tier limits
 export const TIER_LIMITS = {
   FREE: {
     households: 1,
     membersPerHousehold: 2,
     petsPerHousehold: 1,
-    visibleHistory: 1, // Only show 1 feeding record
+    visibleHistory: 1,
   },
   PRO: {
     households: Infinity,

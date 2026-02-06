@@ -47,7 +47,6 @@ const mapHousehold = (data: any): Household => ({
   DateUpdated: data.updated_at,
 });
 
-
 const mapPet = (data: any): Pet => ({
   PetID: data.id,
   UUID: data.id,
@@ -59,6 +58,18 @@ const mapPet = (data: any): Pet => ({
   DateCreated: data.created_at,
   DateUpdated: data.updated_at,
 });
+
+const mapFeedingEvent = (data: any): FeedingEvent => ({
+  EventID: data.id,
+  HouseholdID: data.household_id,
+  PetIDs: data.pet_ids,
+  FedByUserID: data.fed_by_user_id,
+  FedByMemberName: data.fed_by_name,
+  PetNames: data.pet_names,
+  Timestamp: data.created_at,
+  UndoDeadline: data.undo_deadline,
+});
+
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -514,20 +525,29 @@ export async function createPet(name: string, householdId: string): Promise<Pet>
 
 export async function updatePet(petId: string, updates: Partial<Pet>): Promise<Pet | null> {
   try {
-    const pets = await getAllPets();
-    const index = pets.findIndex((p) => p.PetID === petId);
-    if (index === -1) return null;
-    
-    pets[index] = {
-      ...pets[index],
-      ...updates,
-      DateUpdated: new Date().toISOString(),
-    };
-    await saveAllPets(pets);
-    return pets[index];
+    // Translate App names to Cloud names for the update
+    const cloudUpdates: any = {};
+    if (updates.PetName) cloudUpdates.pet_name = updates.PetName;
+    if (updates.LastFedDateTime) cloudUpdates.last_fed_at = updates.LastFedDateTime;
+    if (updates.LastFedByUserID) cloudUpdates.last_fed_by_id = updates.LastFedByUserID;
+    if (updates.UndoDeadline) cloudUpdates.undo_deadline = updates.UndoDeadline;
+
+    const { data, error } = await supabase
+      .from('pets')
+      .update(cloudUpdates)
+      .eq('id', petId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating pet:', error.message);
+      return null;
+    }
+
+    return mapPet(data);
   } catch (error) {
-    console.error('Error updating pet:', error);
-    throw error;
+    console.error('Error in updatePet:', error);
+    return null;
   }
 }
 
@@ -732,43 +752,50 @@ export async function saveAllFeedingEvents(feedingEvents: FeedingEvent[]): Promi
 
 export async function addFeedingEvent(event: Omit<FeedingEvent, 'EventID'>): Promise<FeedingEvent> {
   try {
-    const feedingEvents = await getAllFeedingEvents();
-    const now = new Date();
-    const undoDeadline = new Date(now.getTime() + UNDO_WINDOW_MS);
-    
-    const newEvent: FeedingEvent = {
-      ...event,
-      EventID: generateUUID(),
-      Timestamp: event.Timestamp || now.toISOString(),
-      UndoDeadline: event.UndoDeadline || undoDeadline.toISOString(),
-    };
-    feedingEvents.unshift(newEvent);
-    
-    // Clean up events older than 30 days
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
-    const filteredEvents = feedingEvents.filter((event) => {
-      const eventDate = new Date(event.Timestamp);
-      return eventDate >= thirtyDaysAgo;
-    });
-    
-    await saveAllFeedingEvents(filteredEvents);
-    return newEvent;
+    const { data, error } = await supabase
+      .from('feeding_events')
+      .insert([
+        {
+          household_id: event.HouseholdID,
+          pet_ids: event.PetIDs,
+          fed_by_user_id: event.FedByUserID,
+          fed_by_name: event.FedByMemberName,
+          pet_names: event.PetNames,
+          undo_deadline: event.UndoDeadline,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding feeding event:', error.message);
+      throw error;
+    }
+
+    return mapFeedingEvent(data);
   } catch (error) {
-    console.error('Error adding feeding event:', error);
+    console.error('Error in addFeedingEvent:', error);
     throw error;
   }
 }
 
 export async function getFeedingEventsByHouseholdId(householdId: string): Promise<FeedingEvent[]> {
   try {
-    const feedingEvents = await getAllFeedingEvents();
-    return feedingEvents
-      .filter((e) => e.HouseholdID === householdId)
-      .sort((a, b) => new Date(b.Timestamp).getTime() - new Date(a.Timestamp).getTime());
+    const { data, error } = await supabase
+      .from('feeding_events')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false }) // Newest first
+      .limit(30); // Keep history manageable
+
+    if (error) {
+      console.error('Error getting feeding events:', error.message);
+      return [];
+    }
+
+    return (data || []).map(mapFeedingEvent);
   } catch (error) {
-    console.error('Error getting feeding events by household ID:', error);
+    console.error('Error in getFeedingEventsByHouseholdId:', error);
     return [];
   }
 }
@@ -1089,14 +1116,44 @@ I Fed the Pet Team
   return sendEmail(memberEmail, subject, message);
 }
 
-// This function is just to test if the backend works!
-export async function testSupabaseConnection() {
-  try {
-    const { data, error } = await supabase.from('pets').select('pet_name');
-    if (error) return "❌ Connection Failed: " + error.message;
-    if (data && data.length > 0) return "✅ Connected! Found: " + data[0].pet_name;
-    return "⚠️ Connected, but the table is empty.";
-  } catch (err: any) {
-    return "❌ Error: " + err.message;
-  }
+/**
+ * Listens for any changes to pets or feeding events in a specific household
+ * @param householdId The household to watch
+ * @param onUpdate A function to run whenever a change is detected
+ */
+export function subscribeToHouseholdChanges(
+  householdId: string, 
+  onUpdate: () => void
+) {
+  // 1. Setup the listener for the 'pets' table
+  const petSubscription = supabase
+    .channel('public:pets')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'pets', filter: `household_id=eq.${householdId}` },
+      () => {
+        console.log('🔔 Realtime: Pet updated!');
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  // 2. Setup the listener for the 'feeding_events' table
+  const feedingSubscription = supabase
+    .channel('public:feeding_events')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'feeding_events', filter: `household_id=eq.${householdId}` },
+      () => {
+        console.log('🔔 Realtime: New feeding recorded!');
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  // Return a function to "turn off" the listeners when we leave the screen
+  return () => {
+    supabase.removeChannel(petSubscription);
+    supabase.removeChannel(feedingSubscription);
+  };
 }
