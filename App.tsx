@@ -12,11 +12,11 @@ import { OnboardingFlow } from './src/screens/OnboardingFlow';
 import { StyledStatusScreen } from './src/screens/StatusScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NotificationsPanel } from './src/screens/NotificationsPanel';
-import { isOnboardingCompleted } from './src/lib/database';
+import { isOnboardingCompleted, testSupabaseConnection } from './src/lib/database';
 
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
 
@@ -27,6 +27,8 @@ export default function App() {
 
   const checkOnboardingStatus = async () => {
     try {
+      const testResult = await testSupabaseConnection();
+      console.log("🛠️ SUPABASE TEST:", testResult);
       const completed = await isOnboardingCompleted();
       setOnboardingComplete(completed);
     } catch (error) {
@@ -37,7 +39,7 @@ export default function App() {
   };
 
   const handleOnboardingComplete = () => {
-    setOnboardingComplete(true);
+    setOnboardingComplete(true); 
   };
 
   const handleOpenSettings = () => {
