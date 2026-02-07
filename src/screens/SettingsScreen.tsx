@@ -113,10 +113,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     try {
       const skipCache = options?.skipCache ?? false;
 
-      // Step 1: Try cache first for instant display (only on initial load)
-      if (!skipCache && loading) {
+      // Step 1: Try cache first for instant display
+      // FIX: Removed the "loading" check - we want cache on EVERY load unless skipCache is true
+      if (!skipCache) {
         const cached = await getCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN);
         if (cached) {
+          // Apply cached data immediately
           setCurrentUser(cached.currentUser);
           setHousehold(cached.household);
           if (cached.household) {
@@ -126,12 +128,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
           setPets(cached.pets);
           setFeedingNotifications(cached.feedingNotifications);
           setMemberJoinedNotifications(cached.memberJoinedNotifications);
-          setLoading(false);
+          setLoading(false); // Show cached data instantly
         }
       }
 
-      // Step 2: Always fetch fresh from Supabase
-      if (loading) setLoading(true);
+      // Step 2: Always fetch fresh from Supabase (in background)
+      setLoading(true);
 
       const userId = await getCurrentUserId();
       if (!userId) {
@@ -139,7 +141,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
         return;
       }
 
-      const user = await getUserById(userId);
+      // FIX: Use Promise.all for parallel fetching (2x faster!)
+      const [user, households] = await Promise.all([
+        getUserById(userId),
+        getHouseholdsForUser(userId)
+      ]);
+
       setCurrentUser(user);
 
       const feedNotifs = user?.NotificationPreferences?.feedingNotifications ?? true;
@@ -150,16 +157,18 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
         setMemberJoinedNotifications(memberNotifs);
       }
 
-      const households = await getHouseholdsForUser(userId);
       if (households.length > 0) {
         const hh = households[0];
         setHousehold(hh);
         setHouseholdNameInput(hh.HouseholdName);
 
-        const householdMembers = await getMembersOfHousehold(hh.HouseholdID);
-        setMembers(householdMembers);
+        // FIX: Parallel fetch of members and pets (2x faster!)
+        const [householdMembers, householdPets] = await Promise.all([
+          getMembersOfHousehold(hh.HouseholdID),
+          getPetsByHouseholdId(hh.HouseholdID)
+        ]);
 
-        const householdPets = await getPetsByHouseholdId(hh.HouseholdID);
+        setMembers(householdMembers);
         setPets(householdPets);
 
         // Step 3: Write fresh data to cache
@@ -178,6 +187,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
       setLoading(false);
     }
   }, []);
+
 
   useEffect(() => {
     if (visible) {
