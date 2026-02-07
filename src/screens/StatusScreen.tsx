@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,11 +23,10 @@ import {
   getFeedingEventsByHouseholdId,
   undoFeedingEvent,
   getPetById,
-  getHouseholdById,
   subscribeToHouseholdChanges,
 } from '../lib/database';
-import { Pet, FeedingEvent, User, Household } from '../lib/types';
-import { formatTime, getTimeAgo, canUndo, formatDateHeader } from '../lib/time';
+import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
+import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface StyledStatusScreenProps {
@@ -68,6 +67,8 @@ export function StyledStatusScreen({
   } | null>(null);
   const [historyEvents, setHistoryEvents] = useState<HistoryEventDetails[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isOperationInFlight, setIsOperationInFlight] = useState(false);
+  const suppressNextRealtimeLoad = useRef(false);
 
   // Helper function to resolve event details
   const resolveEventDetails = async (event: FeedingEvent): Promise<{
@@ -150,24 +151,44 @@ export function StyledStatusScreen({
     }
   };
 
-  // 2. Simplified Lifecycle Effects
+  // 2. Lifecycle: initial load + local-only undo timer (zero network calls)
   useEffect(() => {
     loadData();
 
-    // Timer for the "Undo" window
+    // Timer checks undo deadline using LOCAL state only
     const interval = setInterval(() => {
-      canUndoLatest().then(setUndoInfo);
+      setLatestEvent((currentLatestEvent) => {
+        if (!currentLatestEvent || !currentLatestEvent.UndoDeadline) {
+          setUndoInfo({ canUndo: false });
+          return currentLatestEvent;
+        }
+
+        const now = new Date();
+        const deadline = new Date(currentLatestEvent.UndoDeadline);
+        if (now <= deadline) {
+          setUndoInfo({ canUndo: true, eventId: currentLatestEvent.EventID });
+        } else {
+          setUndoInfo({ canUndo: false });
+        }
+
+        return currentLatestEvent; // Return unchanged — we're only reading
+      });
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time listener
+  // Real-time listener for OTHER devices' changes
   useEffect(() => {
     if (!currentHouseholdId) return;
 
     const unsubscribe = subscribeToHouseholdChanges(currentHouseholdId, () => {
-      loadData(); // This now refreshes everything, including Last Fed time
+      if (suppressNextRealtimeLoad.current) {
+        // This was triggered by OUR OWN action — skip the reload
+        suppressNextRealtimeLoad.current = false;
+        return;
+      }
+      loadData(); // Another device changed something — reload
     });
 
     return () => unsubscribe();
@@ -194,9 +215,10 @@ export function StyledStatusScreen({
     }
   };
 
-  // Feed logic
+  // Feed logic — Optimistic Update Pattern
   const handleFeedClick = async () => {
     if (!currentUser || !currentHouseholdId) return;
+    if (isOperationInFlight) return; // Prevent double-tap
 
     const petsToFeed = feedAllSelected
       ? pets
@@ -204,115 +226,176 @@ export function StyledStatusScreen({
 
     if (petsToFeed.length === 0) return;
 
-    try {
-      const now = new Date().toISOString();
-      const petNames = petsToFeed.map((p) => p.PetName).join(', ');
+    // --- SNAPSHOT: Capture current state for rollback ---
+    const previousPets = [...pets];
+    const previousLatestEvent = latestEvent;
+    const previousLatestEventDetails = latestEventDetails;
+    const previousHistoryEvents = [...historyEvents];
+    const previousUndoInfo = { ...undoInfo };
 
-      // 1. Update individual pet statuses in Supabase
-      for (const pet of petsToFeed) {
-        await feedPet(pet.PetID, currentUser.UserID);
+    // --- BUILD: Optimistic state ---
+    const now = new Date();
+    const nowISO = now.toISOString();
+    const undoDeadline = new Date(now.getTime() + UNDO_WINDOW_MS).toISOString();
+    const petNames = petsToFeed.map((p) => p.PetName).join(', ');
+    const tempEventId = `temp-${Date.now()}`;
+
+    const optimisticEvent: FeedingEvent = {
+      EventID: tempEventId,
+      HouseholdID: currentHouseholdId,
+      FedByUserID: currentUser.UserID,
+      FedByMemberName: currentUser.MemberName,
+      PetIDs: petsToFeed.map((p) => p.PetID),
+      PetNames: petNames,
+      Timestamp: nowISO,
+      UndoDeadline: undoDeadline,
+    };
+
+    const optimisticPets = pets.map((pet) => {
+      if (petsToFeed.some((p) => p.PetID === pet.PetID)) {
+        return {
+          ...pet,
+          LastFedDateTime: nowISO,
+          LastFedByUserID: currentUser.UserID,
+          UndoDeadline: undoDeadline,
+        };
       }
+      return pet;
+    });
 
-      // 2. Create the shared Feeding Event history
-      await addFeedingEvent({
+    const optimisticDetails = {
+      petNames: petsToFeed.map((p) => p.PetName),
+      userName: currentUser.MemberName,
+    };
+
+    const optimisticHistoryEntry: HistoryEventDetails = {
+      event: optimisticEvent,
+      ...optimisticDetails,
+    };
+
+    // --- APPLY: Update UI instantly ---
+    setIsOperationInFlight(true);
+    setPets(optimisticPets);
+    setLatestEvent(optimisticEvent);
+    setLatestEventDetails(optimisticDetails);
+    setHistoryEvents([optimisticHistoryEntry, ...previousHistoryEvents].slice(0, 30));
+    setUndoInfo({ canUndo: true, eventId: tempEventId });
+    suppressNextRealtimeLoad.current = true;
+
+    // --- SYNC: Push to Supabase in background ---
+    try {
+      // Feed all pets in parallel (not sequential!)
+      await Promise.all(petsToFeed.map((pet) => feedPet(pet.PetID, currentUser.UserID)));
+
+      // Create the feeding event (with proper UndoDeadline)
+      const createdEvent = await addFeedingEvent({
         HouseholdID: currentHouseholdId,
-        FedByUserID: currentUser.UserID,      // Renamed to match types.ts
-        FedByMemberName: currentUser.MemberName, // Added new required field
+        FedByUserID: currentUser.UserID,
+        FedByMemberName: currentUser.MemberName,
         PetIDs: petsToFeed.map((p) => p.PetID),
-        PetNames: petNames,                   // Added new required field
-        Timestamp: now,
-        UndoDeadline: null,
+        PetNames: petNames,
+        Timestamp: nowISO,
+        UndoDeadline: undoDeadline,
       });
 
-      // 3. Create the in-app Notification
-      await addNotification({
+      // Fire-and-forget notification (AsyncStorage, very fast)
+      addNotification({
         type: 'feeding',
         message: `${currentUser.MemberName} fed...\n${petNames}`,
         petName: petNames,
-        read: false, // This fixes the "Property 'read' is missing" error
+        read: false,
       });
 
-      loadData();
+      // Replace temp EventID with real Supabase ID
+      setLatestEvent((prev) =>
+        prev && prev.EventID === tempEventId ? { ...prev, EventID: createdEvent.EventID } : prev
+      );
+      setHistoryEvents((prev) =>
+        prev.map((item) =>
+          item.event.EventID === tempEventId
+            ? { ...item, event: { ...item.event, EventID: createdEvent.EventID } }
+            : item
+        )
+      );
+      setUndoInfo((prev) =>
+        prev.eventId === tempEventId ? { ...prev, eventId: createdEvent.EventID } : prev
+      );
     } catch (error) {
+      // --- ROLLBACK: Restore previous state on failure ---
       console.error('Error feeding pets:', error);
+      setPets(previousPets);
+      setLatestEvent(previousLatestEvent);
+      setLatestEventDetails(previousLatestEventDetails);
+      setHistoryEvents(previousHistoryEvents);
+      setUndoInfo(previousUndoInfo);
+      suppressNextRealtimeLoad.current = false;
       Alert.alert('Error', 'Failed to feed pets. Please try again.');
+    } finally {
+      setIsOperationInFlight(false);
     }
   };
 
-  // Undo logic
+  // Undo logic — Optimistic Update Pattern
   const handleUndo = async (eventId: string) => {
-    try {
-      await undoFeedingEvent(eventId);
-      loadData();
-    } catch (error) {
-      console.error('Error undoing feeding:', error);
-      Alert.alert('Error', 'Failed to undo feeding. Please try again.');
+    if (isOperationInFlight) return; // Prevent double-tap
+
+    // Don't allow undo on temp events that haven't synced yet
+    if (eventId.startsWith('temp-')) {
+      Alert.alert('Please wait', 'Still syncing with server. Try again in a moment.');
+      return;
     }
-  };
 
-  // Get the most recent feeding event for the status card
-  const getLatestFeedingEvent = async (): Promise<FeedingEvent | null> => {
-    if (!currentHouseholdId) return null;
+    // --- SNAPSHOT: Capture current state for rollback ---
+    const previousPets = [...pets];
+    const previousLatestEvent = latestEvent;
+    const previousLatestEventDetails = latestEventDetails;
+    const previousHistoryEvents = [...historyEvents];
+    const previousUndoInfo = { ...undoInfo };
 
-    try {
-      const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
-      return events.length > 0 ? events[0] : null;
-    } catch (error) {
-      console.error('Error getting latest feeding event:', error);
-      return null;
-    }
-  };
+    // --- BUILD: Find event and compute optimistic state ---
+    const eventToUndo = historyEvents.find((item) => item.event.EventID === eventId);
+    if (!eventToUndo) return;
 
-  // Check if latest feeding event can be undone
-  const canUndoLatest = async (): Promise<{ canUndo: boolean; eventId?: string }> => {
-    if (!currentHouseholdId) return { canUndo: false };
+    const petIdsToUndo = eventToUndo.event.PetIDs;
 
-    try {
-      const events = await getFeedingEventsByHouseholdId(currentHouseholdId);
-      if (events.length === 0) return { canUndo: false };
-
-      const latestEvent = events[0];
-      if (!latestEvent.UndoDeadline) return { canUndo: false };
-
-      const now = new Date();
-      const deadline = new Date(latestEvent.UndoDeadline);
-      return {
-        canUndo: now <= deadline,
-        eventId: latestEvent.EventID,
-      };
-    } catch (error) {
-      console.error('Error checking undo status:', error);
-      return { canUndo: false };
-    }
-  };
-
-  // Load async data including history
-  useEffect(() => {
-    // 1. Initial data load
-    loadData();
-
-    // 2. Set up the 1-second interval ONLY for the "Undo" timer
-    const interval = setInterval(() => {
-      // We only need to check the timer, not reload all data every second
-      canUndoLatest().then(setUndoInfo);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Add a NEW useEffect to handle the Realtime subscription
-  useEffect(() => {
-    if (!currentHouseholdId) return;
-
-    // Start listening for changes in the cloud
-    const unsubscribe = subscribeToHouseholdChanges(currentHouseholdId, () => {
-      loadData(); // Reload everything when the cloud changes
+    const optimisticPets = pets.map((pet) => {
+      if (petIdsToUndo.includes(pet.PetID)) {
+        return { ...pet, LastFedDateTime: null, LastFedByUserID: null, UndoDeadline: null };
+      }
+      return pet;
     });
 
-    // Stop listening if the component disappears
-    return () => unsubscribe();
-  }, [currentHouseholdId]);
-  // Reload when pets change (after feeding)
+    const optimisticHistory = historyEvents.filter((item) => item.event.EventID !== eventId);
+    const newLatest = optimisticHistory.length > 0 ? optimisticHistory[0] : null;
+
+    // --- APPLY: Update UI instantly ---
+    setIsOperationInFlight(true);
+    setPets(optimisticPets);
+    setLatestEvent(newLatest ? newLatest.event : null);
+    setLatestEventDetails(newLatest ? { petNames: newLatest.petNames, userName: newLatest.userName } : null);
+    setHistoryEvents(optimisticHistory);
+    setUndoInfo({ canUndo: false });
+    suppressNextRealtimeLoad.current = true;
+
+    // --- SYNC: Push to Supabase in background ---
+    try {
+      await undoFeedingEvent(eventId);
+    } catch (error) {
+      // --- ROLLBACK: Restore previous state on failure ---
+      console.error('Error undoing feeding:', error);
+      setPets(previousPets);
+      setLatestEvent(previousLatestEvent);
+      setLatestEventDetails(previousLatestEventDetails);
+      setHistoryEvents(previousHistoryEvents);
+      setUndoInfo(previousUndoInfo);
+      suppressNextRealtimeLoad.current = false;
+      Alert.alert('Error', 'Failed to undo feeding. Please try again.');
+    } finally {
+      setIsOperationInFlight(false);
+    }
+  };
+
+  // (getLatestFeedingEvent and canUndoLatest removed — undo timer now uses local state)
 
   // Determine visible history based on tier
   const visibleHistory = isPro ? historyEvents.slice(0, 5) : historyEvents.slice(0, 1);
@@ -461,8 +544,13 @@ export function StyledStatusScreen({
         <View style={styles.feedButtonContainer}>
           <TouchableOpacity
             onPress={handleFeedClick}
-            style={[styles.feedButton, { backgroundColor: theme.primary }]}
+            style={[
+              styles.feedButton,
+              { backgroundColor: theme.primary },
+              isOperationInFlight && { opacity: 0.5 },
+            ]}
             activeOpacity={0.8}
+            disabled={isOperationInFlight}
           >
             <Text style={styles.feedButtonText}>I FED THE PET</Text>
           </TouchableOpacity>
@@ -470,8 +558,9 @@ export function StyledStatusScreen({
           {undoInfo.canUndo && (
             <TouchableOpacity
               onPress={() => undoInfo.eventId && handleUndo(undoInfo.eventId)}
-              style={styles.undoButton}
+              style={[styles.undoButton, isOperationInFlight && { opacity: 0.5 }]}
               activeOpacity={0.7}
+              disabled={isOperationInFlight}
             >
               <Text style={[styles.undoButtonText, { color: theme.textTertiary }]}>
                 Undo (available for 2 minutes)

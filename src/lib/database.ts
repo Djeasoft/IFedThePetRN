@@ -204,20 +204,30 @@ export async function createUser(
 
 export async function updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
   try {
-    const users = await getAllUsers();
-    const index = users.findIndex((u) => u.UserID === userId);
-    if (index === -1) return null;
-    
-    users[index] = {
-      ...users[index],
-      ...updates,
-      DateUpdated: new Date().toISOString(),
-    };
-    await saveAllUsers(users);
-    return users[index];
+    // Translate App field names to Cloud field names
+    const cloudUpdates: any = {};
+    if (updates.MemberName !== undefined) cloudUpdates.member_name = updates.MemberName;
+    if (updates.EmailAddress !== undefined) cloudUpdates.email_address = updates.EmailAddress;
+    if (updates.IsMainMember !== undefined) cloudUpdates.is_main_member = updates.IsMainMember;
+    if (updates.InvitationStatus !== undefined) cloudUpdates.invitation_status = updates.InvitationStatus;
+    if (updates.NotificationPreferences !== undefined) cloudUpdates.notification_prefs = updates.NotificationPreferences;
+
+    const { data, error } = await supabase
+      .from('users')
+      .update(cloudUpdates)
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating user:', error.message);
+      return null;
+    }
+
+    return mapUser(data);
   } catch (error) {
-    console.error('Error updating user:', error);
-    throw error;
+    console.error('Error in updateUser:', error);
+    return null;
   }
 }
 
@@ -244,10 +254,22 @@ export async function saveAllHouseholds(households: Household[]): Promise<void> 
 
 export async function getHouseholdById(householdId: string): Promise<Household | null> {
   try {
-    const households = await getAllHouseholds();
-    return households.find((h) => h.HouseholdID === householdId) || null;
+    const { data, error } = await supabase
+      .from('households')
+      .select('*')
+      .eq('id', householdId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching household from Supabase:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return mapHousehold(data);
   } catch (error) {
-    console.error('Error getting household by ID:', error);
+    console.error('Error in getHouseholdById:', error);
     return null;
   }
 }
@@ -304,20 +326,29 @@ export async function createHousehold(name: string, mainMemberId: string, isPro:
 
 export async function updateHousehold(householdId: string, updates: Partial<Household>): Promise<Household | null> {
   try {
-    const households = await getAllHouseholds();
-    const index = households.findIndex((h) => h.HouseholdID === householdId);
-    if (index === -1) return null;
-    
-    households[index] = {
-      ...households[index],
-      ...updates,
-      DateUpdated: new Date().toISOString(),
-    };
-    await saveAllHouseholds(households);
-    return households[index];
+    // Translate App field names to Cloud field names
+    const cloudUpdates: any = {};
+    if (updates.HouseholdName !== undefined) cloudUpdates.household_name = updates.HouseholdName;
+    if (updates.InvitationCode !== undefined) cloudUpdates.invitation_code = updates.InvitationCode;
+    if (updates.MainMemberID !== undefined) cloudUpdates.main_member_id = updates.MainMemberID;
+    if (updates.IsSubscriptionPro !== undefined) cloudUpdates.is_pro = updates.IsSubscriptionPro;
+
+    const { data, error } = await supabase
+      .from('households')
+      .update(cloudUpdates)
+      .eq('id', householdId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating household:', error.message);
+      return null;
+    }
+
+    return mapHousehold(data);
   } catch (error) {
-    console.error('Error updating household:', error);
-    throw error;
+    console.error('Error in updateHousehold:', error);
+    return null;
   }
 }
 
@@ -398,17 +429,21 @@ export async function createUserHousehold(userId: string, householdId: string, r
 
 export async function removeUserFromHousehold(userId: string, householdId: string): Promise<boolean> {
   try {
-    const userHouseholds = await getAllUserHouseholds();
-    const filtered = userHouseholds.filter(
-      (uh) => !(uh.UserID === userId && uh.HouseholdID === householdId)
-    );
-    if (filtered.length === userHouseholds.length) return false;
-    
-    await saveAllUserHouseholds(filtered);
+    const { error } = await supabase
+      .from('user_households')
+      .delete()
+      .eq('user_id', userId)
+      .eq('household_id', householdId);
+
+    if (error) {
+      console.error('Error removing user from household:', error.message);
+      return false;
+    }
+
     return true;
   } catch (error) {
-    console.error('Error removing user from household:', error);
-    throw error;
+    console.error('Error in removeUserFromHousehold:', error);
+    return false;
   }
 }
 
@@ -490,10 +525,22 @@ export async function getPetsByHouseholdId(householdId: string): Promise<Pet[]> 
 
 export async function getPetById(petId: string): Promise<Pet | null> {
   try {
-    const pets = await getAllPets();
-    return pets.find((p) => p.PetID === petId) || null;
+    const { data, error } = await supabase
+      .from('pets')
+      .select('*')
+      .eq('id', petId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching pet from Supabase:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return mapPet(data);
   } catch (error) {
-    console.error('Error getting pet by ID:', error);
+    console.error('Error in getPetById:', error);
     return null;
   }
 }
@@ -527,10 +574,10 @@ export async function updatePet(petId: string, updates: Partial<Pet>): Promise<P
   try {
     // Translate App names to Cloud names for the update
     const cloudUpdates: any = {};
-    if (updates.PetName) cloudUpdates.pet_name = updates.PetName;
-    if (updates.LastFedDateTime) cloudUpdates.last_fed_at = updates.LastFedDateTime;
-    if (updates.LastFedByUserID) cloudUpdates.last_fed_by_id = updates.LastFedByUserID;
-    if (updates.UndoDeadline) cloudUpdates.undo_deadline = updates.UndoDeadline;
+    if (updates.PetName !== undefined) cloudUpdates.pet_name = updates.PetName;
+    if (updates.LastFedDateTime !== undefined) cloudUpdates.last_fed_at = updates.LastFedDateTime;
+    if (updates.LastFedByUserID !== undefined) cloudUpdates.last_fed_by_id = updates.LastFedByUserID;
+    if (updates.UndoDeadline !== undefined) cloudUpdates.undo_deadline = updates.UndoDeadline;
 
     const { data, error } = await supabase
       .from('pets')
@@ -802,25 +849,43 @@ export async function getFeedingEventsByHouseholdId(householdId: string): Promis
 
 export async function undoFeedingEvent(eventId: string): Promise<boolean> {
   try {
-    const feedingEvents = await getAllFeedingEvents();
-    const event = feedingEvents.find((e) => e.EventID === eventId);
-    if (!event) return false;
-    
-    // Check if undo is still allowed
+    // 1. Read the event from Supabase
+    const { data, error: fetchError } = await supabase
+      .from('feeding_events')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error('Error fetching feeding event:', fetchError.message);
+      return false;
+    }
+    if (!data) return false;
+
+    const event = mapFeedingEvent(data);
+
+    // 2. Check if undo is still allowed
     if (!event.UndoDeadline) return false;
     const now = new Date();
     const deadline = new Date(event.UndoDeadline);
     if (now > deadline) return false; // Undo window expired
-    
-    // Undo all pets in this feeding event
+
+    // 3. Undo all pets in this feeding event
     for (const petId of event.PetIDs) {
       await undoFeedPet(petId);
     }
-    
-    // Remove the feeding event
-    const filtered = feedingEvents.filter((e) => e.EventID !== eventId);
-    await saveAllFeedingEvents(filtered);
-    
+
+    // 4. Delete the feeding event from Supabase
+    const { error: deleteError } = await supabase
+      .from('feeding_events')
+      .delete()
+      .eq('id', eventId);
+
+    if (deleteError) {
+      console.error('Error deleting feeding event:', deleteError.message);
+      return false;
+    }
+
     return true;
   } catch (error) {
     console.error('Error undoing feeding event:', error);
