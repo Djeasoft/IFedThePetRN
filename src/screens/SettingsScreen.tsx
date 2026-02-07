@@ -2,7 +2,7 @@
 // Version: 1.0.0 - React Native with Theme Support
 // Sections: Household, Members, Pets, Notifications, Reminders, Appearance, Upgrade, Legal, Developer
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -36,11 +36,24 @@ import {
   createUserHousehold,
   addNotification,
   sendMemberRemovedEmail,
+  subscribeToSettingsChanges,
+  getCachedScreenData,
+  setCachedScreenData,
+  CACHE_KEYS,
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { Switch } from '../components/Switch';
 import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
+
+interface SettingsScreenCache {
+  currentUser: User | null;
+  household: Household | null;
+  members: User[];
+  pets: Pet[];
+  feedingNotifications: boolean;
+  memberJoinedNotifications: boolean;
+}
 
 interface SettingsScreenProps {
   visible: boolean;
@@ -86,16 +99,40 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
   // Pricing plan selection
   const [selectedPlan, setSelectedPlan] = useState<'yearly' | 'monthly'>('yearly');
 
+  // Real-time suppression ref
+  const suppressNextRealtimeLoad = useRef(false);
+
   // Computed values
   const isMainMember = currentUser?.IsMainMember ?? false;
   const isPro = household?.IsSubscriptionPro ?? false;
   const memberCount = members.filter((m) => m.InvitationStatus === 'Active').length;
   const pendingCount = members.filter((m) => m.InvitationStatus === 'Pending').length;
 
-  // Load data
-  const loadData = useCallback(async () => {
+  // Load data (with cache-first pattern)
+  const loadData = useCallback(async (options?: { skipCache?: boolean }) => {
     try {
-      setLoading(true);
+      const skipCache = options?.skipCache ?? false;
+
+      // Step 1: Try cache first for instant display (only on initial load)
+      if (!skipCache && loading) {
+        const cached = await getCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN);
+        if (cached) {
+          setCurrentUser(cached.currentUser);
+          setHousehold(cached.household);
+          if (cached.household) {
+            setHouseholdNameInput(cached.household.HouseholdName);
+          }
+          setMembers(cached.members);
+          setPets(cached.pets);
+          setFeedingNotifications(cached.feedingNotifications);
+          setMemberJoinedNotifications(cached.memberJoinedNotifications);
+          setLoading(false);
+        }
+      }
+
+      // Step 2: Always fetch fresh from Supabase
+      if (loading) setLoading(true);
+
       const userId = await getCurrentUserId();
       if (!userId) {
         setLoading(false);
@@ -105,9 +142,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
       const user = await getUserById(userId);
       setCurrentUser(user);
 
+      const feedNotifs = user?.NotificationPreferences?.feedingNotifications ?? true;
+      const memberNotifs = user?.NotificationPreferences?.memberJoinedNotifications ?? true;
+
       if (user?.NotificationPreferences) {
-        setFeedingNotifications(user.NotificationPreferences.feedingNotifications);
-        setMemberJoinedNotifications(user.NotificationPreferences.memberJoinedNotifications);
+        setFeedingNotifications(feedNotifs);
+        setMemberJoinedNotifications(memberNotifs);
       }
 
       const households = await getHouseholdsForUser(userId);
@@ -121,6 +161,16 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
 
         const householdPets = await getPetsByHouseholdId(hh.HouseholdID);
         setPets(householdPets);
+
+        // Step 3: Write fresh data to cache
+        await setCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN, {
+          currentUser: user,
+          household: hh,
+          members: householdMembers,
+          pets: householdPets,
+          feedingNotifications: feedNotifs,
+          memberJoinedNotifications: memberNotifs,
+        });
       }
     } catch (error) {
       console.error('Error loading settings data:', error);
@@ -135,11 +185,27 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     }
   }, [visible, loadData]);
 
+  // Real-time listener for OTHER devices' changes
+  useEffect(() => {
+    if (!visible || !household?.HouseholdID) return;
+
+    const unsubscribe = subscribeToSettingsChanges(household.HouseholdID, () => {
+      if (suppressNextRealtimeLoad.current) {
+        suppressNextRealtimeLoad.current = false;
+        return;
+      }
+      loadData({ skipCache: true });
+    });
+
+    return () => unsubscribe();
+  }, [visible, household?.HouseholdID]);
+
   // Handlers
   const handleSaveHouseholdName = async () => {
     if (!household || !householdNameInput.trim()) return;
 
     try {
+      suppressNextRealtimeLoad.current = true;
       await updateHousehold(household.HouseholdID, {
         HouseholdName: householdNameInput.trim(),
       });
@@ -202,6 +268,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     }
 
     try {
+      suppressNextRealtimeLoad.current = true;
       // Create pending user with the provided name
       const newUser = await createUser(name, email, false, 'Pending');
       await createUserHousehold(newUser.UserID, household.HouseholdID);
@@ -236,6 +303,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
           style: 'destructive',
           onPress: async () => {
             try {
+              suppressNextRealtimeLoad.current = true;
               await removeUserFromHousehold(member.UserID, household.HouseholdID);
 
               // Send email notification
@@ -278,6 +346,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     }
 
     try {
+      suppressNextRealtimeLoad.current = true;
       await createPet(newPetName.trim(), household.HouseholdID);
       setShowAddPetModal(false);
       setNewPetName('');
@@ -298,6 +367,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
           style: 'destructive',
           onPress: async () => {
             try {
+              suppressNextRealtimeLoad.current = true;
               await deletePet(pet.PetID);
               loadData();
             } catch (error) {

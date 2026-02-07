@@ -12,13 +12,8 @@ export type { Notification } from './types';
 export type { FeedingEvent } from './types';
 
 const STORAGE_KEYS = {
-  USERS: 'users',
-  HOUSEHOLDS: 'households',
-  USER_HOUSEHOLDS: 'userHouseholds',
-  PETS: 'pets',
   CURRENT_USER_ID: 'currentUserId',
   NOTIFICATIONS: 'notifications',
-  FEEDING_EVENTS: 'feedingEvents',
   FEED_REMINDERS: 'feedReminders',
   ONBOARDING_COMPLETED: 'onboardingCompleted',
 };
@@ -70,6 +65,14 @@ const mapFeedingEvent = (data: any): FeedingEvent => ({
   UndoDeadline: data.undo_deadline,
 });
 
+const mapUserHousehold = (data: any): UserHousehold => ({
+  UserHouseholdID: data.id,
+  UserID: data.user_id,
+  HouseholdID: data.household_id,
+  DateJoined: data.created_at,
+  ReceivesReminders: data.receives_reminders,
+});
+
 
 // ===== UTILITY FUNCTIONS =====
 
@@ -92,25 +95,6 @@ export function generateInvitationCode(): string {
 }
 
 // ===== USER FUNCTIONS =====
-
-export async function getAllUsers(): Promise<User[]> {
-  try {
-    const usersJson = await AsyncStorage.getItem(STORAGE_KEYS.USERS);
-    return usersJson ? JSON.parse(usersJson) : [];
-  } catch (error) {
-    console.error('Error reading users:', error);
-    return [];
-  }
-}
-
-export async function saveAllUsers(users: User[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users));
-  } catch (error) {
-    console.error('Error saving users:', error);
-    throw error;
-  }
-}
 
 export async function getUserById(userId: string): Promise<User | null> {
   try {
@@ -233,25 +217,6 @@ export async function updateUser(userId: string, updates: Partial<User>): Promis
 
 // ===== HOUSEHOLD FUNCTIONS =====
 
-export async function getAllHouseholds(): Promise<Household[]> {
-  try {
-    const householdsJson = await AsyncStorage.getItem(STORAGE_KEYS.HOUSEHOLDS);
-    return householdsJson ? JSON.parse(householdsJson) : [];
-  } catch (error) {
-    console.error('Error reading households:', error);
-    return [];
-  }
-}
-
-export async function saveAllHouseholds(households: Household[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.HOUSEHOLDS, JSON.stringify(households));
-  } catch (error) {
-    console.error('Error saving households:', error);
-    throw error;
-  }
-}
-
 export async function getHouseholdById(householdId: string): Promise<Household | null> {
   try {
     const { data, error } = await supabase
@@ -356,39 +321,56 @@ export async function updateHousehold(householdId: string, updates: Partial<Hous
 
 export async function getAllUserHouseholds(): Promise<UserHousehold[]> {
   try {
-    const userHouseholdsJson = await AsyncStorage.getItem(STORAGE_KEYS.USER_HOUSEHOLDS);
-    return userHouseholdsJson ? JSON.parse(userHouseholdsJson) : [];
-  } catch (error) {
-    console.error('Error reading user households:', error);
-    return [];
-  }
-}
+    const { data, error } = await supabase
+      .from('user_households')
+      .select('*');
 
-export async function saveAllUserHouseholds(userHouseholds: UserHousehold[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.USER_HOUSEHOLDS, JSON.stringify(userHouseholds));
+    if (error) {
+      console.error('Error reading user households from Supabase:', error.message);
+      return [];
+    }
+
+    return (data || []).map(mapUserHousehold);
   } catch (error) {
-    console.error('Error saving user households:', error);
-    throw error;
+    console.error('Error in getAllUserHouseholds:', error);
+    return [];
   }
 }
 
 export async function getUserHouseholdsByUserId(userId: string): Promise<UserHousehold[]> {
   try {
-    const userHouseholds = await getAllUserHouseholds();
-    return userHouseholds.filter((uh) => uh.UserID === userId);
+    const { data, error } = await supabase
+      .from('user_households')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error getting user households by user ID:', error.message);
+      return [];
+    }
+
+    return (data || []).map(mapUserHousehold);
   } catch (error) {
-    console.error('Error getting user households by user ID:', error);
+    console.error('Error in getUserHouseholdsByUserId:', error);
     return [];
   }
 }
 
 export async function getUserHouseholdsByHouseholdId(householdId: string): Promise<UserHousehold[]> {
   try {
-    const userHouseholds = await getAllUserHouseholds();
-    return userHouseholds.filter((uh) => uh.HouseholdID === householdId);
+    const { data, error } = await supabase
+      .from('user_households')
+      .select('*')
+      .eq('household_id', householdId);
+
+    if (error) {
+      console.error('Error getting user households by household ID:', error.message);
+      return [];
+    }
+
+    return (data || []).map(mapUserHousehold);
   } catch (error) {
-    console.error('Error getting user households by household ID:', error);
+    console.error('Error in getUserHouseholdsByHouseholdId:', error);
     return [];
   }
 }
@@ -413,14 +395,7 @@ export async function createUserHousehold(userId: string, householdId: string, r
       throw error;
     }
 
-    // Return the link data (mapping the cloud ID to the App's UserHouseholdID)
-    return {
-      UserHouseholdID: data.id,
-      UserID: data.user_id,
-      HouseholdID: data.household_id,
-      DateJoined: data.created_at,
-      ReceivesReminders: data.receives_reminders,
-    };
+    return mapUserHousehold(data);
   } catch (error) {
     console.error('Error in createUserHousehold:', error);
     throw error;
@@ -454,18 +429,20 @@ export async function updateUserHouseholdReminderPref(
   receivesReminders: boolean
 ): Promise<UserHousehold | null> {
   try {
-    const userHouseholds = await getAllUserHouseholds();
-    const index = userHouseholds.findIndex(
-      (uh) => uh.UserID === userId && uh.HouseholdID === householdId
-    );
-    if (index === -1) return null;
-    
-    userHouseholds[index] = {
-      ...userHouseholds[index],
-      ReceivesReminders: receivesReminders,
-    };
-    await saveAllUserHouseholds(userHouseholds);
-    return userHouseholds[index];
+    const { data, error } = await supabase
+      .from('user_households')
+      .update({ receives_reminders: receivesReminders })
+      .eq('user_id', userId)
+      .eq('household_id', householdId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating reminder preference:', error.message);
+      return null;
+    }
+
+    return mapUserHousehold(data);
   } catch (error) {
     console.error('Error updating reminder preference:', error);
     throw error;
@@ -475,34 +452,28 @@ export async function updateUserHouseholdReminderPref(
 // Get UserHousehold entry for a specific user in a household
 export async function getUserHousehold(userId: string, householdId: string): Promise<UserHousehold | null> {
   try {
-    const userHouseholds = await getAllUserHouseholds();
-    return userHouseholds.find((uh) => uh.UserID === userId && uh.HouseholdID === householdId) || null;
+    const { data, error } = await supabase
+      .from('user_households')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('household_id', householdId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error getting user household:', error.message);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return mapUserHousehold(data);
   } catch (error) {
-    console.error('Error getting user household:', error);
+    console.error('Error in getUserHousehold:', error);
     return null;
   }
 }
 
 // ===== PET FUNCTIONS =====
-
-export async function getAllPets(): Promise<Pet[]> {
-  try {
-    const petsJson = await AsyncStorage.getItem(STORAGE_KEYS.PETS);
-    return petsJson ? JSON.parse(petsJson) : [];
-  } catch (error) {
-    console.error('Error reading pets:', error);
-    return [];
-  }
-}
-
-export async function saveAllPets(pets: Pet[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.PETS, JSON.stringify(pets));
-  } catch (error) {
-    console.error('Error saving pets:', error);
-    throw error;
-  }
-}
 
 export async function getPetsByHouseholdId(householdId: string): Promise<Pet[]> {
   try {
@@ -777,25 +748,6 @@ export async function clearAllNotifications(): Promise<void> {
 }
 
 // ===== FEEDING EVENTS =====
-
-export async function getAllFeedingEvents(): Promise<FeedingEvent[]> {
-  try {
-    const feedingEventsJson = await AsyncStorage.getItem(STORAGE_KEYS.FEEDING_EVENTS);
-    return feedingEventsJson ? JSON.parse(feedingEventsJson) : [];
-  } catch (error) {
-    console.error('Error reading feeding events:', error);
-    return [];
-  }
-}
-
-export async function saveAllFeedingEvents(feedingEvents: FeedingEvent[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.FEEDING_EVENTS, JSON.stringify(feedingEvents));
-  } catch (error) {
-    console.error('Error saving feeding events:', error);
-    throw error;
-  }
-}
 
 export async function addFeedingEvent(event: Omit<FeedingEvent, 'EventID'>): Promise<FeedingEvent> {
   try {
@@ -1181,6 +1133,31 @@ I Fed the Pet Team
   return sendEmail(memberEmail, subject, message);
 }
 
+// ===== SCREEN CACHE =====
+
+export const CACHE_KEYS = {
+  STATUS_SCREEN: 'cache:statusScreen',
+  SETTINGS_SCREEN: 'cache:settingsScreen',
+};
+
+export async function getCachedScreenData<T>(cacheKey: string): Promise<T | null> {
+  try {
+    const json = await AsyncStorage.getItem(cacheKey);
+    return json ? JSON.parse(json) : null;
+  } catch (error) {
+    console.error('Error reading cache:', error);
+    return null;
+  }
+}
+
+export async function setCachedScreenData<T>(cacheKey: string, data: T): Promise<void> {
+  try {
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch (error) {
+    console.error('Error writing cache:', error);
+  }
+}
+
 /**
  * Listens for any changes to pets or feeding events in a specific household
  * @param householdId The household to watch
@@ -1220,5 +1197,58 @@ export function subscribeToHouseholdChanges(
   return () => {
     supabase.removeChannel(petSubscription);
     supabase.removeChannel(feedingSubscription);
+  };
+}
+
+/**
+ * Listens for changes relevant to the Settings screen:
+ * - households table: name, pro status changes
+ * - user_households table: member joins/leaves
+ * - pets table: pet additions/deletions
+ */
+export function subscribeToSettingsChanges(
+  householdId: string,
+  onUpdate: () => void
+) {
+  const householdSub = supabase
+    .channel(`settings:households:${householdId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'households', filter: `id=eq.${householdId}` },
+      () => {
+        console.log('Settings realtime: Household updated!');
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  const membershipSub = supabase
+    .channel(`settings:user_households:${householdId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_households', filter: `household_id=eq.${householdId}` },
+      () => {
+        console.log('Settings realtime: Membership changed!');
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  const petSub = supabase
+    .channel(`settings:pets:${householdId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'pets', filter: `household_id=eq.${householdId}` },
+      () => {
+        console.log('Settings realtime: Pet updated!');
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(householdSub);
+    supabase.removeChannel(membershipSub);
+    supabase.removeChannel(petSub);
   };
 }

@@ -24,6 +24,9 @@ import {
   undoFeedingEvent,
   getPetById,
   subscribeToHouseholdChanges,
+  getCachedScreenData,
+  setCachedScreenData,
+  CACHE_KEYS,
 } from '../lib/database';
 import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
 import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
@@ -38,6 +41,18 @@ interface HistoryEventDetails {
   event: FeedingEvent;
   petNames: string[];
   userName: string;
+}
+
+interface StatusScreenCache {
+  pets: Pet[];
+  household: Household | null;
+  currentUser: User | null;
+  isPro: boolean;
+  currentHouseholdId: string | null;
+  latestEvent: FeedingEvent | null;
+  latestEventDetails: { petNames: string[]; userName: string } | null;
+  historyEvents: HistoryEventDetails[];
+  unreadCount: number;
 }
 
 export function StyledStatusScreen({
@@ -91,9 +106,29 @@ export function StyledStatusScreen({
   };
 
   // Load data
-  // 1. Unified Loading Function
-  const loadData = async () => {
+  // 1. Unified Loading Function (with cache-first pattern)
+  const loadData = async (options?: { skipCache?: boolean }) => {
     try {
+      const skipCache = options?.skipCache ?? false;
+
+      // Step 1: Try cache first for instant display (only on initial load)
+      if (!skipCache && loading) {
+        const cached = await getCachedScreenData<StatusScreenCache>(CACHE_KEYS.STATUS_SCREEN);
+        if (cached) {
+          setPets(cached.pets);
+          setHousehold(cached.household);
+          setCurrentUser(cached.currentUser);
+          setIsPro(cached.isPro);
+          setCurrentHouseholdId(cached.currentHouseholdId);
+          setLatestEvent(cached.latestEvent);
+          setLatestEventDetails(cached.latestEventDetails);
+          setHistoryEvents(cached.historyEvents);
+          setUnreadCount(cached.unreadCount);
+          setLoading(false);
+        }
+      }
+
+      // Step 2: Always fetch fresh from Supabase
       const userId = await getCurrentUserId();
       if (!userId) return;
 
@@ -122,27 +157,43 @@ export function StyledStatusScreen({
       setUnreadCount(count);
 
       // Update the Latest Event and History list
+      let resolvedLatestDetails: { petNames: string[]; userName: string } | null = null;
+      let resolvedHistory: HistoryEventDetails[] = [];
+
       if (events.length > 0) {
         const latest = events[0];
         setLatestEvent(latest);
 
         // Resolve names for the latest event
-        const details = await resolveEventDetails(latest);
-        setLatestEventDetails(details);
+        resolvedLatestDetails = await resolveEventDetails(latest);
+        setLatestEventDetails(resolvedLatestDetails);
 
         // Resolve names for the history list (up to 30)
-        const eventsWithDetails = await Promise.all(
+        resolvedHistory = await Promise.all(
           events.slice(0, 30).map(async (evt) => {
             const details = await resolveEventDetails(evt);
             return { event: evt, ...details };
           })
         );
-        setHistoryEvents(eventsWithDetails);
+        setHistoryEvents(resolvedHistory);
       } else {
         setLatestEvent(null);
         setLatestEventDetails(null);
         setHistoryEvents([]);
       }
+
+      // Step 3: Write fresh data to cache
+      await setCachedScreenData<StatusScreenCache>(CACHE_KEYS.STATUS_SCREEN, {
+        pets: householdPets,
+        household: currentHousehold,
+        currentUser: user,
+        isPro: currentHousehold.IsSubscriptionPro,
+        currentHouseholdId: currentHousehold.HouseholdID,
+        latestEvent: events.length > 0 ? events[0] : null,
+        latestEventDetails: resolvedLatestDetails,
+        historyEvents: resolvedHistory,
+        unreadCount: count,
+      });
 
     } catch (error) {
       console.error('Error loading data:', error);

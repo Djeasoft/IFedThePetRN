@@ -15,9 +15,9 @@ import {
   initializeDemoData,
   getCurrentUserId,
   getUserById,
-  getAllHouseholds,
-  getAllPets,
-  getAllUsers,
+  getHouseholdsForUser,
+  getPetsByHouseholdId,
+  getMembersOfHousehold,
   feedPet,
   undoFeedPet,
   resetOnboarding,
@@ -41,15 +41,18 @@ export default function TestDataScreen() {
       if (userId) {
         const user = await getUserById(userId);
         setCurrentUser(user);
+
+        const userHouseholds = await getHouseholdsForUser(userId);
+        setHouseholds(userHouseholds);
+
+        if (userHouseholds.length > 0) {
+          const householdPets = await getPetsByHouseholdId(userHouseholds[0].HouseholdID);
+          setPets(householdPets);
+
+          const members = await getMembersOfHousehold(userHouseholds[0].HouseholdID);
+          setUsers(members);
+        }
       }
-
-      const allHouseholds = await getAllHouseholds();
-      const allPets = await getAllPets();
-      const allUsers = await getAllUsers();
-
-      setHouseholds(allHouseholds);
-      setPets(allPets);
-      setUsers(allUsers);
 
       setLastAction('✅ Data loaded successfully');
     } catch (error) {
