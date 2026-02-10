@@ -2,6 +2,7 @@
 // Version: 1.0.0 - React Native
 // Version: 2.0.0 - Converted from localStorage (web) to AsyncStorage (mobile)
 // Version: 3.0.0 - Supabase integration
+// Version: 3.1.0 - Added resetToNewUser() for dev/testing
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -98,7 +99,6 @@ export function generateInvitationCode(): string {
 
 export async function getUserById(userId: string): Promise<User | null> {
   try {
-    // 1. Look in Supabase instead of the phone's memory
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -106,14 +106,11 @@ export async function getUserById(userId: string): Promise<User | null> {
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching user from Supabase:', error.message);
+      console.error('Error getting user by ID:', error.message);
       return null;
     }
 
-    if (!data) return null;
-
-    // 2. Use our mapUser translator to turn Cloud data into App data
-    return mapUser(data);
+    return data ? mapUser(data) : null;
   } catch (error) {
     console.error('Error in getUserById:', error);
     return null;
@@ -122,22 +119,19 @@ export async function getUserById(userId: string): Promise<User | null> {
 
 export async function getUserByEmail(email: string): Promise<User | null> {
   try {
+    console.log('getUserByEmail Method - Start');
     const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('email_address', email.toLowerCase())
-      .maybeSingle(); 
+      .maybeSingle();
 
     if (error) {
       console.error('Error getting user by email:', error.message);
       return null;
     }
-
-    // If no user is found, just return null
-    if (!data) return null;
-
-    // Use our translator to turn Cloud data into App data
-    return mapUser(data);
+    console.log('getUserByEmail No error');
+    return data ? mapUser(data) : null;
   } catch (error) {
     console.error('Error in getUserByEmail:', error);
     return null;
@@ -145,30 +139,24 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 export async function createUser(
-  name: string,
-  email: string,
+  memberName: string,
+  emailAddress: string,
   isMainMember: boolean,
-  status: 'Pending' | 'Active' = 'Active'
+  invitationStatus: 'Active' | 'Pending' = 'Active'
 ): Promise<User> {
   try {
-    // 1. FIRST: Check if this email already exists in the cloud
-    const existingUser = await getUserByEmail(email);
-    
-    // 2. If the user IS found, just return that user instead of creating a new one
-    if (existingUser) {
-      console.log("✅ User already exists, using existing record.");
-      return existingUser;
-    }
-
-    // 3. If the user is NOT found, then create them fresh
     const { data, error } = await supabase
       .from('users')
       .insert([
         {
-          member_name: name,
-          email_address: email.toLowerCase(),
+          member_name: memberName,
+          email_address: emailAddress.toLowerCase(),
           is_main_member: isMainMember,
-          invitation_status: status,
+          invitation_status: invitationStatus,
+          notification_prefs: {
+            feedingNotifications: true,
+            memberJoinedNotifications: true,
+          },
         },
       ])
       .select()
@@ -181,20 +169,26 @@ export async function createUser(
 
     return mapUser(data);
   } catch (error) {
-    console.error('Error in createUser logic:', error);
+    console.error('Error in createUser:', error);
     throw error;
   }
 }
 
 export async function updateUser(userId: string, updates: Partial<User>): Promise<User | null> {
   try {
-    // Translate App field names to Cloud field names
-    const cloudUpdates: any = {};
+    // Map from app field names to cloud field names
+    const cloudUpdates: Record<string, any> = {};
+
     if (updates.MemberName !== undefined) cloudUpdates.member_name = updates.MemberName;
     if (updates.EmailAddress !== undefined) cloudUpdates.email_address = updates.EmailAddress;
     if (updates.IsMainMember !== undefined) cloudUpdates.is_main_member = updates.IsMainMember;
     if (updates.InvitationStatus !== undefined) cloudUpdates.invitation_status = updates.InvitationStatus;
     if (updates.NotificationPreferences !== undefined) cloudUpdates.notification_prefs = updates.NotificationPreferences;
+
+    if (Object.keys(cloudUpdates).length === 0) {
+      // No updates provided
+      return await getUserById(userId);
+    }
 
     const { data, error } = await supabase
       .from('users')
@@ -226,51 +220,47 @@ export async function getHouseholdById(householdId: string): Promise<Household |
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching household from Supabase:', error.message);
+      console.error('Error getting household by ID:', error.message);
       return null;
     }
 
-    if (!data) return null;
-
-    return mapHousehold(data);
+    return data ? mapHousehold(data) : null;
   } catch (error) {
     console.error('Error in getHouseholdById:', error);
     return null;
   }
 }
 
-export async function getHouseholdByInvitationCode(code: string): Promise<Household | null> {
+export async function getHouseholdByInvitationCode(invitationCode: string): Promise<Household | null> {
   try {
     const { data, error } = await supabase
       .from('households')
       .select('*')
-      .eq('invitation_code', code.toUpperCase())
+      .eq('invitation_code', invitationCode.toUpperCase())
       .maybeSingle();
 
     if (error) {
-      console.error('Error getting household by code:', error.message);
+      console.error('Error getting household by invitation code:', error.message);
       return null;
     }
 
-    if (!data) return null;
-
-    return mapHousehold(data);
+    return data ? mapHousehold(data) : null;
   } catch (error) {
     console.error('Error in getHouseholdByInvitationCode:', error);
     return null;
   }
 }
 
-export async function createHousehold(name: string, mainMemberId: string, isPro: boolean = false): Promise<Household> {
+export async function createHousehold(householdName: string, mainMemberId: string, isPro: boolean = false): Promise<Household> {
   try {
     const { data, error } = await supabase
       .from('households')
       .insert([
         {
-          household_name: name,
-          invitation_code: generateInvitationCode(),
+          household_name: householdName,
           main_member_id: mainMemberId,
           is_pro: isPro,
+          invitation_code: generateInvitationCode(),
         },
       ])
       .select()
@@ -281,7 +271,6 @@ export async function createHousehold(name: string, mainMemberId: string, isPro:
       throw error;
     }
 
-    // Use our translator here
     return mapHousehold(data);
   } catch (error) {
     console.error('Error in createHousehold:', error);
@@ -291,12 +280,15 @@ export async function createHousehold(name: string, mainMemberId: string, isPro:
 
 export async function updateHousehold(householdId: string, updates: Partial<Household>): Promise<Household | null> {
   try {
-    // Translate App field names to Cloud field names
-    const cloudUpdates: any = {};
+    // Map from app field names to cloud field names
+    const cloudUpdates: Record<string, any> = {};
+
     if (updates.HouseholdName !== undefined) cloudUpdates.household_name = updates.HouseholdName;
-    if (updates.InvitationCode !== undefined) cloudUpdates.invitation_code = updates.InvitationCode;
-    if (updates.MainMemberID !== undefined) cloudUpdates.main_member_id = updates.MainMemberID;
     if (updates.IsSubscriptionPro !== undefined) cloudUpdates.is_pro = updates.IsSubscriptionPro;
+
+    if (Object.keys(cloudUpdates).length === 0) {
+      return await getHouseholdById(householdId);
+    }
 
     const { data, error } = await supabase
       .from('households')
@@ -317,66 +309,9 @@ export async function updateHousehold(householdId: string, updates: Partial<Hous
   }
 }
 
-// ===== USER_HOUSEHOLD FUNCTIONS =====
+// ===== USER HOUSEHOLD FUNCTIONS =====
 
-export async function getAllUserHouseholds(): Promise<UserHousehold[]> {
-  try {
-    const { data, error } = await supabase
-      .from('user_households')
-      .select('*');
-
-    if (error) {
-      console.error('Error reading user households from Supabase:', error.message);
-      return [];
-    }
-
-    return (data || []).map(mapUserHousehold);
-  } catch (error) {
-    console.error('Error in getAllUserHouseholds:', error);
-    return [];
-  }
-}
-
-export async function getUserHouseholdsByUserId(userId: string): Promise<UserHousehold[]> {
-  try {
-    const { data, error } = await supabase
-      .from('user_households')
-      .select('*')
-      .eq('user_id', userId);
-
-    if (error) {
-      console.error('Error getting user households by user ID:', error.message);
-      return [];
-    }
-
-    return (data || []).map(mapUserHousehold);
-  } catch (error) {
-    console.error('Error in getUserHouseholdsByUserId:', error);
-    return [];
-  }
-}
-
-export async function getUserHouseholdsByHouseholdId(householdId: string): Promise<UserHousehold[]> {
-  try {
-    const { data, error } = await supabase
-      .from('user_households')
-      .select('*')
-      .eq('household_id', householdId);
-
-    if (error) {
-      console.error('Error getting user households by household ID:', error.message);
-      return [];
-    }
-
-    return (data || []).map(mapUserHousehold);
-  } catch (error) {
-    console.error('Error in getUserHouseholdsByHouseholdId:', error);
-    return [];
-  }
-}
-
-// Create a UserHousehold link (when a user joins a household)
-export async function createUserHousehold(userId: string, householdId: string, receivesReminders = false): Promise<UserHousehold> {
+export async function createUserHousehold(userId: string, householdId: string, receivesReminders: boolean = true): Promise<UserHousehold> {
   try {
     const { data, error } = await supabase
       .from('user_households')
@@ -422,65 +357,35 @@ export async function removeUserFromHousehold(userId: string, householdId: strin
   }
 }
 
-// Update reminder preference for a user in a household
-export async function updateUserHouseholdReminderPref(
-  userId: string,
-  householdId: string,
-  receivesReminders: boolean
-): Promise<UserHousehold | null> {
+// ===== PET FUNCTIONS =====
+
+export async function getPetById(petId: string): Promise<Pet | null> {
   try {
     const { data, error } = await supabase
-      .from('user_households')
-      .update({ receives_reminders: receivesReminders })
-      .eq('user_id', userId)
-      .eq('household_id', householdId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating reminder preference:', error.message);
-      return null;
-    }
-
-    return mapUserHousehold(data);
-  } catch (error) {
-    console.error('Error updating reminder preference:', error);
-    throw error;
-  }
-}
-
-// Get UserHousehold entry for a specific user in a household
-export async function getUserHousehold(userId: string, householdId: string): Promise<UserHousehold | null> {
-  try {
-    const { data, error } = await supabase
-      .from('user_households')
+      .from('pets')
       .select('*')
-      .eq('user_id', userId)
-      .eq('household_id', householdId)
+      .eq('id', petId)
       .maybeSingle();
 
     if (error) {
-      console.error('Error getting user household:', error.message);
+      console.error('Error getting pet by ID:', error.message);
       return null;
     }
 
-    if (!data) return null;
-
-    return mapUserHousehold(data);
+    return data ? mapPet(data) : null;
   } catch (error) {
-    console.error('Error in getUserHousehold:', error);
+    console.error('Error in getPetById:', error);
     return null;
   }
 }
-
-// ===== PET FUNCTIONS =====
 
 export async function getPetsByHouseholdId(householdId: string): Promise<Pet[]> {
   try {
     const { data, error } = await supabase
       .from('pets')
       .select('*')
-      .eq('household_id', householdId);
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: true }); // Oldest first (natural order)
 
     if (error) {
       console.error('Error getting pets:', error.message);
@@ -494,35 +399,13 @@ export async function getPetsByHouseholdId(householdId: string): Promise<Pet[]> 
   }
 }
 
-export async function getPetById(petId: string): Promise<Pet | null> {
-  try {
-    const { data, error } = await supabase
-      .from('pets')
-      .select('*')
-      .eq('id', petId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error fetching pet from Supabase:', error.message);
-      return null;
-    }
-
-    if (!data) return null;
-
-    return mapPet(data);
-  } catch (error) {
-    console.error('Error in getPetById:', error);
-    return null;
-  }
-}
-
-export async function createPet(name: string, householdId: string): Promise<Pet> {
+export async function createPet(petName: string, householdId: string): Promise<Pet> {
   try {
     const { data, error } = await supabase
       .from('pets')
       .insert([
         {
-          pet_name: name,
+          pet_name: petName,
           household_id: householdId,
         },
       ])
@@ -543,12 +426,18 @@ export async function createPet(name: string, householdId: string): Promise<Pet>
 
 export async function updatePet(petId: string, updates: Partial<Pet>): Promise<Pet | null> {
   try {
-    // Translate App names to Cloud names for the update
-    const cloudUpdates: any = {};
+    // Map from app field names to cloud field names
+    const cloudUpdates: Record<string, any> = {};
+
     if (updates.PetName !== undefined) cloudUpdates.pet_name = updates.PetName;
     if (updates.LastFedDateTime !== undefined) cloudUpdates.last_fed_at = updates.LastFedDateTime;
     if (updates.LastFedByUserID !== undefined) cloudUpdates.last_fed_by_id = updates.LastFedByUserID;
     if (updates.UndoDeadline !== undefined) cloudUpdates.undo_deadline = updates.UndoDeadline;
+
+    if (Object.keys(cloudUpdates).length === 0) {
+      // No updates provided
+      return await getPetById(petId);
+    }
 
     const { data, error } = await supabase
       .from('pets')
@@ -588,11 +477,15 @@ export async function deletePet(petId: string): Promise<boolean> {
   }
 }
 
-export async function feedPet(petId: string, userId: string): Promise<Pet | null> {
+export async function feedPet(
+  petId: string,
+  userId: string,
+  memberName: string
+): Promise<Pet | null> {
   try {
     const now = new Date();
     const undoDeadline = new Date(now.getTime() + UNDO_WINDOW_MS);
-    
+
     return await updatePet(petId, {
       LastFedDateTime: now.toISOString(),
       LastFedByUserID: userId,
@@ -960,6 +853,41 @@ export async function resetOnboarding(): Promise<void> {
   }
 }
 
+// ===== RESET TO NEW USER (FOR TESTING/DEV) =====
+
+/**
+ * Complete reset to fresh/new user state
+ * Clears all session, onboarding, notifications, and caches
+ * Does NOT delete any Supabase data - just clears the device's local state
+ * Intended for development/testing workflows
+ */
+export async function resetToNewUser(): Promise<void> {
+  try {
+    console.log('🔄 Resetting to new user state...');
+    
+    // Step 1: Clear session
+    await clearCurrentUserId();
+    
+    // Step 2: Reset onboarding flag
+    await resetOnboarding();
+    
+    // Step 3: Clear all notifications
+    await clearAllNotifications();
+    
+    // Step 4: Clear all feed reminders
+    await AsyncStorage.removeItem(STORAGE_KEYS.FEED_REMINDERS);
+    
+    // Step 5: Clear screen caches
+    await AsyncStorage.removeItem(CACHE_KEYS.STATUS_SCREEN);
+    await AsyncStorage.removeItem(CACHE_KEYS.SETTINGS_SCREEN);
+    
+    console.log('✅ Reset complete - app will restart to onboarding');
+  } catch (error) {
+    console.error('Error in resetToNewUser:', error);
+    throw error;
+  }
+}
+
 // ===== HELPER FUNCTIONS =====
 
 // Get all households for a user
@@ -1071,9 +999,6 @@ export async function canAddPet(householdId: string): Promise<boolean> {
 // Initialize demo data for testing
 export async function initializeDemoData(): Promise<void> {
   try {
-    // Clear existing data
-    await AsyncStorage.clear();
-    
     // Create main member
     const mainUser = await createUser('Daniel', 'daniel@example.com', true, 'Active');
     await setCurrentUserId(mainUser.UserID);

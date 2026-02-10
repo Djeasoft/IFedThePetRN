@@ -1,6 +1,6 @@
-// OnboardingFlow - Complete Multi-Step Flow
+// OnboardingFlow.tsx
 // Version: 1.0.0 - React Native with Theme Support
-// Steps: Welcome → Name → Email → Household/InviteCode → Complete
+// Version: 2.0.0 - Added resetToNewUser() for dev/testing, new method getUserByEmail
 
 import React, { useState } from 'react';
 import {
@@ -116,8 +116,20 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
 
     try {
-      // Create main member user
-      const user = await createUser(name, email, true, 'Active');
+      // Check if user already exists (e.g., after a reset)
+      let user = await getUserByEmail(email);
+      
+      if (user) {
+        // Update existing user with new name and main member status
+        await updateUser(user.UserID, {
+          MemberName: name,
+          IsMainMember: true,
+          InvitationStatus: 'Active',
+        });
+      } else {
+        // Create new main member user
+        user = await createUser(name, email, true, 'Active');
+      }
 
       // Create household
       const household = await createHousehold(householdName, user.UserID, false);

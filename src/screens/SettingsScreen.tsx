@@ -1,6 +1,6 @@
-// SettingsScreen - Complete Settings Modal
+// SettingsScreen.tsx
 // Version: 1.0.0 - React Native with Theme Support
-// Sections: Household, Members, Pets, Notifications, Reminders, Appearance, Upgrade, Legal, Developer
+// Version: 2.0.0 - Added resetToNewUser() for dev/testing
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -40,6 +40,7 @@ import {
   getCachedScreenData,
   setCachedScreenData,
   CACHE_KEYS,
+  resetToNewUser,
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -426,6 +427,32 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     } catch (error) {
       Alert.alert('Error', 'Failed to toggle Pro status');
     }
+  };
+
+  const handleResetToNewUser = async () => {
+    Alert.alert(
+      'Reset to New User?',
+      'This will clear your session and reset the app to onboarding. Useful for testing fresh user flows. Your Supabase data is NOT deleted.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await resetToNewUser();
+              // Close settings and trigger onboarding reset callback
+              onClose();
+              if (onResetOnboarding) {
+                onResetOnboarding();
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to reset app state');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleResetOnboarding = async () => {
@@ -1105,6 +1132,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
                     <SettingsRow
                       label="Reset to Onboarding"
                       onPress={handleResetOnboarding}
+                      destructive
+                    />
+                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                    <SettingsRow
+                      label="Reset to New User"
+                      onPress={handleResetToNewUser}
                       destructive
                     />
                   </View>
