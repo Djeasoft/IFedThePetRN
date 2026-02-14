@@ -429,10 +429,17 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
 
     try {
       const newProStatus = !household.IsSubscriptionPro;
-      await updateHousehold(household.HouseholdID, {
+      const result = await updateHousehold(household.HouseholdID, {
         IsSubscriptionPro: newProStatus,
       });
-      setHousehold({ ...household, IsSubscriptionPro: newProStatus });
+
+      if (result) {
+        // ✅ Only update UI if database update succeeded
+        setHousehold(result);
+      } else {
+        // ❌ If database failed, show error and don't update UI
+        Alert.alert('Error', 'Failed to toggle Pro status');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to toggle Pro status');
     }
@@ -511,7 +518,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
       const members = await getMembersOfHousehold(newHouseholdId);
       const currentUserId = await getCurrentUserId();
       const userIsMember = members.some(m => m.UserID === currentUserId);
-      
+
       if (!userIsMember) {
         Alert.alert('Error', 'You are no longer a member of this household');
         setSwitchingHousehold(false);
