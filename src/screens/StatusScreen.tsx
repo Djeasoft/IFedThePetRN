@@ -1,3 +1,8 @@
+// StatusScreen.tsx
+// Version: 1.0.0 - React Native with Theme Support
+// Version: 2.0.0 - React Web to React Native
+// Version: 3.0.0 - Multi-Household Switcher Implementation
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -27,6 +32,8 @@ import {
   getCachedScreenData,
   setCachedScreenData,
   CACHE_KEYS,
+  setCurrentHouseholdId,
+  getCurrentHouseholdId,
 } from '../lib/database';
 import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
 import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
@@ -111,7 +118,7 @@ export function StyledStatusScreen({
     try {
       const skipCache = options?.skipCache ?? false;
 
-      // Step 1: Try cache first for instant display (only on initial load)
+      // Step 1: Try cache first for instant display
       if (!skipCache && loading) {
         const cached = await getCachedScreenData<StatusScreenCache>(CACHE_KEYS.STATUS_SCREEN);
         if (cached) {
@@ -135,18 +142,38 @@ export function StyledStatusScreen({
       const user = await getUserById(userId);
       setCurrentUser(user);
 
+      // Get ALL households for this user
       const households = await getHouseholdsForUser(userId);
       if (households.length === 0) {
         setLoading(false);
         return;
       }
 
-      const currentHousehold = households[0];
+      // Get current household ID (with fallback)
+      let currentHouseholdId = await getCurrentHouseholdId();
+      if (!currentHouseholdId) {
+        // No saved household, use first one
+        currentHouseholdId = households[0].HouseholdID;
+        await setCurrentHouseholdId(currentHouseholdId);
+      }
+
+      // Find the current household in the list
+      const currentHousehold = households.find(h => h.HouseholdID === currentHouseholdId);
+      if (!currentHousehold) {
+        // Saved household is invalid (deleted?), fallback to first
+        const fallback = households[0];
+        await setCurrentHouseholdId(fallback.HouseholdID);
+        setCurrentHouseholdId(fallback.HouseholdID);
+        // Recursively load with corrected household
+        await loadData(options);
+        return;
+      }
+
       setHousehold(currentHousehold);
       setCurrentHouseholdId(currentHousehold.HouseholdID);
       setIsPro(currentHousehold.IsSubscriptionPro);
 
-      // Fetch Pets and History together
+      // Fetch Pets and History for CURRENT household only
       const [householdPets, events, count] = await Promise.all([
         getPetsByHouseholdId(currentHousehold.HouseholdID),
         getFeedingEventsByHouseholdId(currentHousehold.HouseholdID),

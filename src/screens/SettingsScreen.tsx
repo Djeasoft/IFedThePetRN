@@ -1,6 +1,7 @@
 // SettingsScreen.tsx
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - Added resetToNewUser() for dev/testing
+// Version: 3.0.0 - Multi-Household Switcher Implementation
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -15,6 +16,7 @@ import {
   Modal,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -41,6 +43,8 @@ import {
   setCachedScreenData,
   CACHE_KEYS,
   resetToNewUser,
+  setCurrentHouseholdId,
+  getCurrentHouseholdId
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -71,6 +75,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
   const [members, setMembers] = useState<User[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showHouseholdSwitcher, setShowHouseholdSwitcher] = useState(false);
+  const [allHouseholds, setAllHouseholds] = useState<Household[]>([]);
+  const [switchingHousehold, setSwitchingHousehold] = useState(false);
 
   // Edit states
   const [editingHouseholdName, setEditingHouseholdName] = useState(false);
@@ -162,6 +169,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
         const hh = households[0];
         setHousehold(hh);
         setHouseholdNameInput(hh.HouseholdName);
+        setAllHouseholds(households);
 
         // FIX: Parallel fetch of members and pets (2x faster!)
         const [householdMembers, householdPets] = await Promise.all([
@@ -478,6 +486,45 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     );
   };
 
+  const handleSwitchHousehold = async (newHouseholdId: string) => {
+    if (newHouseholdId === household?.HouseholdID) {
+      // Same household, just close modal
+      setShowHouseholdSwitcher(false);
+      return;
+    }
+
+    setSwitchingHousehold(true);
+
+    try {
+      // Save the new household ID
+      await setCurrentHouseholdId(newHouseholdId);
+
+      // Load the new household
+      const newHousehold = await getHouseholdById(newHouseholdId);
+      if (newHousehold) {
+        setHousehold(newHousehold);
+        setHouseholdNameInput(newHousehold.HouseholdName);
+
+        // Reload members and pets for new household
+        const [householdMembers, householdPets] = await Promise.all([
+          getMembersOfHousehold(newHousehold.HouseholdID),
+          getPetsByHouseholdId(newHousehold.HouseholdID)
+        ]);
+
+        setMembers(householdMembers);
+        setPets(householdPets);
+
+        // Close modal with animation
+        setShowHouseholdSwitcher(false);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to switch household');
+      console.error('Error switching household:', error);
+    } finally {
+      setSwitchingHousehold(false);
+    }
+  };
+
   const handleOpenLink = (url: string) => {
     Linking.openURL(url).catch(() => {
       Alert.alert('Error', 'Failed to open link');
@@ -599,10 +646,11 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
             </View>
           ) : (
             <>
-              {/* Household Section - Match RW design */}
+              {/* Household Section */}
               <SectionHeader title="Household" />
               <View style={[styles.card, { backgroundColor: theme.surface }]}>
                 {editingHouseholdName ? (
+                  // Keep existing edit mode code unchanged
                   <View style={styles.householdEditContainer}>
                     <TextInput
                       style={[
@@ -640,15 +688,24 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
                     </View>
                   </View>
                 ) : (
-                  <View style={styles.householdInfoRow}>
-                    <View style={styles.householdInfoLeft}>
-                      <Text style={[styles.householdName, { color: theme.text }]}>
-                        {household?.HouseholdName}
-                      </Text>
-                      <Text style={[styles.householdMeta, { color: theme.textSecondary }]}>
-                        {isPro ? 'Pro' : 'Free'} · {memberCount} member{memberCount !== 1 ? 's' : ''}
-                      </Text>
-                    </View>
+                  <View style={styles.householdDisplayContainer}>
+                    <TouchableOpacity
+                      onPress={() => setShowHouseholdSwitcher(true)}
+                      style={styles.householdSwitcherButton}
+                      activeOpacity={0.7}
+                      disabled={switchingHousehold}
+                    >
+                      <View style={styles.householdInfoLeft}>
+                        <Text style={[styles.householdName, { color: theme.text }]}>
+                          {household?.HouseholdName}
+                        </Text>
+                        <Text style={[styles.householdMeta, { color: theme.textSecondary }]}>
+                          {isPro ? 'Pro' : 'Free'} · {memberCount} member{memberCount !== 1 ? 's' : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
+                    </TouchableOpacity>
+
                     {isMainMember && (
                       <TouchableOpacity
                         onPress={() => {
@@ -656,8 +713,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
                           setHouseholdNameInput(household?.HouseholdName || '');
                         }}
                         style={[styles.householdEditButton, { backgroundColor: theme.hover }]}
+                        activeOpacity={0.7}
                       >
-                        <Ionicons name="pencil" size={20} color={theme.text} />
+                        <Ionicons name="pencil" size={18} color={theme.text} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -1559,6 +1617,70 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
             </View>
           </View>
         </Modal>
+
+        {/* Household Switcher Modal */}
+        <Modal
+          visible={showHouseholdSwitcher}
+          animationType="fade"
+          transparent
+          onRequestClose={() => !switchingHousehold && setShowHouseholdSwitcher(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Select Household
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowHouseholdSwitcher(false)}
+                  disabled={switchingHousehold}
+                  style={styles.modalCloseButton}
+                >
+                  <Ionicons name="close" size={24} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Household List */}
+              <ScrollView style={styles.householdSwitcherList}>
+                {allHouseholds.map((hh) => (
+                  <TouchableOpacity
+                    key={hh.HouseholdID}
+                    onPress={() => handleSwitchHousehold(hh.HouseholdID)}
+                    disabled={switchingHousehold}
+                    style={[
+                      styles.householdSwitcherItem,
+                      {
+                        backgroundColor: hh.HouseholdID === household?.HouseholdID
+                          ? theme.primaryLight + '20'
+                          : 'transparent',
+                        borderBottomColor: theme.border,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.householdSwitcherItemLeft}>
+                      {hh.HouseholdID === household?.HouseholdID && (
+                        <Ionicons name="checkmark" size={20} color={theme.primary} style={{ marginRight: 12 }} />
+                      )}
+                      <View>
+                        <Text style={[styles.householdSwitcherName, { color: theme.text }]}>
+                          {hh.HouseholdName}
+                        </Text>
+                        <Text style={[styles.householdSwitcherMeta, { color: theme.textSecondary }]}>
+                          {hh.IsSubscriptionPro ? 'Pro' : 'Free'} · {hh.MainMemberID === currentUser?.UserID ? 'Admin' : 'Member'}
+                        </Text>
+                      </View>
+                    </View>
+                    {switchingHousehold && hh.HouseholdID === household?.HouseholdID && (
+                      <ActivityIndicator color={theme.primary} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   );
@@ -2219,5 +2341,43 @@ const styles = StyleSheet.create({
   modalButtonText: {
     fontSize: fontSize.base,
     fontWeight: fontWeight.semibold,
+  },
+
+  householdDisplayContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  householdSwitcherButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  householdSwitcherList: {
+    maxHeight: 400,
+  },
+  householdSwitcherItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.base,
+    borderBottomWidth: 1,
+  },
+  householdSwitcherItemLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  householdSwitcherName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+  },
+  householdSwitcherMeta: {
+    fontSize: fontSize.sm,
+    marginTop: 2,
   },
 });

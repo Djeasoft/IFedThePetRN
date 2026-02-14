@@ -3,6 +3,7 @@
 // Version: 2.0.0 - Converted from localStorage (web) to AsyncStorage (mobile)
 // Version: 3.0.0 - Supabase integration
 // Version: 3.1.0 - Added resetToNewUser() for dev/testing
+// Version: 4.0.0 - Multi-Household Switcher Implementation
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -14,6 +15,7 @@ export type { FeedingEvent } from './types';
 
 const STORAGE_KEYS = {
   CURRENT_USER_ID: 'currentUserId',
+  CURRENT_HOUSEHOLD_ID: 'currentHouseholdId',
   NOTIFICATIONS: 'notifications',
   FEED_REMINDERS: 'feedReminders',
   ONBOARDING_COMPLETED: 'onboardingCompleted',
@@ -305,6 +307,75 @@ export async function updateHousehold(householdId: string, updates: Partial<Hous
     return mapHousehold(data);
   } catch (error) {
     console.error('Error in updateHousehold:', error);
+    return null;
+  }
+}
+
+/**
+ * Get the currently selected household ID from AsyncStorage
+ */
+export async function getCurrentHouseholdId(): Promise<string | null> {
+  try {
+    const householdId = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_HOUSEHOLD_ID);
+    return householdId;
+  } catch (error) {
+    console.error('Error getting current household ID:', error);
+    return null;
+  }
+}
+
+/**
+ * Set the currently selected household ID in AsyncStorage
+ * Call this when user switches households
+ */
+export async function setCurrentHouseholdId(householdId: string): Promise<void> {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CURRENT_HOUSEHOLD_ID, householdId);
+  } catch (error) {
+    console.error('Error setting current household ID:', error);
+    throw error;
+  }
+}
+
+/**
+ * Clear the current household ID (when user logs out or resets)
+ */
+export async function clearCurrentHouseholdId(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.CURRENT_HOUSEHOLD_ID);
+  } catch (error) {
+    console.error('Error clearing current household ID:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the current household with fallback logic
+ * 1. Try to load saved currentHouseholdId
+ * 2. If not found, get first household for user
+ * 3. Save whichever we loaded
+ */
+export async function getCurrentHousehold(): Promise<Household | null> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
+    // Step 1: Try to get saved household ID
+    let householdId = await getCurrentHouseholdId();
+
+    // Step 2: If not saved, get first household and save it
+    if (!householdId) {
+      const households = await getHouseholdsForUser(userId);
+      if (households.length === 0) return null;
+
+      householdId = households[0].HouseholdID;
+      await setCurrentHouseholdId(householdId);
+    }
+
+    // Step 3: Load and return the household
+    return await getHouseholdById(householdId);
+  } catch (error) {
+    console.error('Error getting current household:', error);
     return null;
   }
 }
@@ -867,6 +938,7 @@ export async function resetToNewUser(): Promise<void> {
     
     // Step 1: Clear session
     await clearCurrentUserId();
+    await clearCurrentHouseholdId();
     
     // Step 2: Reset onboarding flag
     await resetOnboarding();
