@@ -296,20 +296,20 @@ export async function updateHousehold(householdId: string, updates: Partial<Hous
       .from('households')
       .update(cloudUpdates)
       .eq('id', householdId)
-      .select();
+      .select()
+      .single();
 
     if (error) {
       console.error('Error updating household:', error.message);
       return null;
     }
 
-    // Handle array response
-    if (!data || data.length === 0) {
+    if (!data) {
       console.error('No data returned from household update');
       return null;
     }
 
-    return mapHousehold(data[0]); // Take first (and should be only) result
+    return mapHousehold(data);
   } catch (error) {
     console.error('Error in updateHousehold:', error);
     return null;

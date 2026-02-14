@@ -45,7 +45,9 @@ import {
   CACHE_KEYS,
   resetToNewUser,
   setCurrentHouseholdId,
-  getCurrentHouseholdId
+  getCurrentHouseholdId,
+  clearCurrentUserId,
+  clearCurrentHouseholdId
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
@@ -443,6 +445,32 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     } catch (error) {
       Alert.alert('Error', 'Failed to toggle Pro status');
     }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearCurrentUserId();
+              await clearCurrentHouseholdId();
+              onClose();
+              if (onResetOnboarding) {
+                onResetOnboarding();
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleResetToNewUser = async () => {
@@ -1210,6 +1238,16 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
                   label="Terms of Service"
                   onPress={() => handleOpenLink('https://ifedthepet.com/terms')}
                   showChevron
+                />
+              </View>
+
+              {/* Account Section */}
+              <SectionHeader title="Account" />
+              <View style={[styles.card, { backgroundColor: theme.surface }]}>
+                <SettingsRow
+                  label="Sign Out"
+                  onPress={handleSignOut}
+                  destructive
                 />
               </View>
 
