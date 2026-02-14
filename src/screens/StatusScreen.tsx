@@ -118,8 +118,8 @@ export function StyledStatusScreen({
     try {
       const skipCache = options?.skipCache ?? false;
 
-      // Step 1: Try cache first for instant display
-      if (!skipCache && loading) {
+      // Step 1: Try cache first for instant display (FIXED: removed && loading)
+      if (!skipCache) {
         const cached = await getCachedScreenData<StatusScreenCache>(CACHE_KEYS.STATUS_SCREEN);
         if (cached) {
           setPets(cached.pets);
@@ -132,6 +132,7 @@ export function StyledStatusScreen({
           setHistoryEvents(cached.historyEvents);
           setUnreadCount(cached.unreadCount);
           setLoading(false);
+          // Continue with background fetch below (don't return)
         }
       }
 

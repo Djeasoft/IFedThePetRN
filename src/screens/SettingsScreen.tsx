@@ -23,6 +23,7 @@ import * as Clipboard from 'expo-clipboard';
 import {
   getCurrentUserId,
   getUserById,
+  getHouseholdById,
   getHouseholdsForUser,
   getMembersOfHousehold,
   getPetsByHouseholdId,
@@ -494,34 +495,64 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
     }
 
     setSwitchingHousehold(true);
+    suppressNextRealtimeLoad.current = true;
 
     try {
+      // FIX #4: Verify the household exists before switching
+      const newHousehold = await getHouseholdById(newHouseholdId);
+      if (!newHousehold) {
+        Alert.alert('Error', 'This household no longer exists');
+        setSwitchingHousehold(false);
+        suppressNextRealtimeLoad.current = false;
+        return;
+      }
+
+      // Verify user is still a member of this household
+      const members = await getMembersOfHousehold(newHouseholdId);
+      const currentUserId = await getCurrentUserId();
+      const userIsMember = members.some(m => m.UserID === currentUserId);
+      
+      if (!userIsMember) {
+        Alert.alert('Error', 'You are no longer a member of this household');
+        setSwitchingHousehold(false);
+        suppressNextRealtimeLoad.current = false;
+        return;
+      }
+
       // Save the new household ID
       await setCurrentHouseholdId(newHouseholdId);
 
-      // Load the new household
-      const newHousehold = await getHouseholdById(newHouseholdId);
-      if (newHousehold) {
-        setHousehold(newHousehold);
-        setHouseholdNameInput(newHousehold.HouseholdName);
+      // Update household state
+      setHousehold(newHousehold);
+      setHouseholdNameInput(newHousehold.HouseholdName);
+      setMembers(members);
 
-        // Reload members and pets for new household
-        const [householdMembers, householdPets] = await Promise.all([
-          getMembersOfHousehold(newHousehold.HouseholdID),
-          getPetsByHouseholdId(newHousehold.HouseholdID)
-        ]);
+      // Reload pets for new household
+      const householdPets = await getPetsByHouseholdId(newHousehold.HouseholdID);
+      setPets(householdPets);
 
-        setMembers(householdMembers);
-        setPets(householdPets);
-
-        // Close modal with animation
-        setShowHouseholdSwitcher(false);
+      // Update cache with new household data
+      const user = await getCurrentUserId();
+      if (user) {
+        const userData = await getUserById(user);
+        await setCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN, {
+          currentUser: userData,
+          household: newHousehold,
+          members: members,
+          pets: householdPets,
+          feedingNotifications,
+          memberJoinedNotifications,
+        });
       }
+
+      // Close modal
+      setShowHouseholdSwitcher(false);
     } catch (error) {
-      Alert.alert('Error', 'Failed to switch household');
+      Alert.alert('Error', `Failed to switch household: ${(error as Error).message}`);
       console.error('Error switching household:', error);
     } finally {
       setSwitchingHousehold(false);
+      suppressNextRealtimeLoad.current = false;
     }
   };
 
