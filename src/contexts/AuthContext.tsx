@@ -1,5 +1,7 @@
 // AuthContext - Supabase Auth State Provider
 // Version: 1.0.0 - Session management with reactive state updates
+// Version: 1.1.0 - Add error handling for invalid refresh tokens
+// Version: 1.2.0 - Validate cached session with getUser() on startup to catch stale refresh tokens
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
@@ -20,15 +22,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setIsLoading(false);
-    });
+    const initSession = async () => {
+      try {
+        // getSession() reads from local storage cache — does NOT validate with server
+        const { data: { session: cachedSession }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.warn('⚠️ Auth session error on startup:', sessionError.message);
+          await supabase.auth.signOut().catch(() => {});
+          setSession(null);
+          return;
+        }
+
+        if (cachedSession) {
+          // Validate the cached session against the server.
+          // This catches stale/invalid refresh tokens BEFORE leaving the loading state,
+          // preventing a flash of logged-in UI followed by a sign-out.
+          const { error: userError } = await supabase.auth.getUser();
+          if (userError) {
+            console.warn('⚠️ Cached session invalid, signing out:', userError.message);
+            await supabase.auth.signOut().catch(() => {});
+            setSession(null);
+            return;
+          }
+          console.log('✅ Session validated:', cachedSession.user?.email ?? 'no user');
+        }
+
+        setSession(cachedSession);
+      } catch (err) {
+        console.error('❌ Unexpected auth error on startup:', err);
+        await supabase.auth.signOut().catch(() => {});
+        setSession(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initSession();
 
     // Listen for auth state changes (login, logout, token refresh, email verification)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        console.log('🔔 Auth state changed - event:', event, 'session:', session?.user?.email ?? 'no user');
         setSession(session);
       }
     );

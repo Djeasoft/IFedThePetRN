@@ -29,6 +29,7 @@ const mapUser = (data: any): User => ({
   MemberName: data.member_name,
   EmailAddress: data.email_address,
   IsMainMember: data.is_main_member,
+  IsOnboardingCompleted: data.is_onboarding_completed ?? false,
   InvitationStatus: data.invitation_status,
   NotificationPreferences: data.notification_prefs,
   DateCreated: data.created_at,
@@ -161,6 +162,28 @@ export async function getUserByAuthId(authUserId: string): Promise<User | null> 
   }
 }
 
+export async function userExistsInDatabase(authUserId: string | undefined): Promise<boolean> {
+  if (!authUserId) return false;
+  
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', authUserId)
+      .limit(1);
+
+    if (error) {
+      console.error('Error checking if user exists:', error.message);
+      return false;
+    }
+
+    return Array.isArray(data) && data.length > 0;
+  } catch (error) {
+    console.error('Error in userExistsInDatabase:', error);
+    return false;
+  }
+}
+
 export async function createUser(
   memberName: string,
   emailAddress: string,
@@ -211,6 +234,7 @@ export async function updateUser(userId: string, updates: Partial<User>): Promis
     if (updates.IsMainMember !== undefined) cloudUpdates.is_main_member = updates.IsMainMember;
     if (updates.InvitationStatus !== undefined) cloudUpdates.invitation_status = updates.InvitationStatus;
     if (updates.NotificationPreferences !== undefined) cloudUpdates.notification_prefs = updates.NotificationPreferences;
+    if (updates.IsOnboardingCompleted !== undefined) cloudUpdates.is_onboarding_completed = updates.IsOnboardingCompleted;
     if (updates.AuthUserID !== undefined) cloudUpdates.auth_user_id = updates.AuthUserID;
 
     if (Object.keys(cloudUpdates).length === 0) {
@@ -927,9 +951,26 @@ export async function deleteFeedReminder(reminderId: string): Promise<boolean> {
 
 // ===== ONBOARDING =====
 
-export async function isOnboardingCompleted(): Promise<boolean> {
+export async function isOnboardingCompleted(authUserId?: string): Promise<boolean> {
   try {
+    // Primary: check Supabase users table (source of truth)
+    if (authUserId) {
+      const { data, error } = await supabase
+        .from('users')
+        .select('is_onboarding_completed')
+        .eq('auth_user_id', authUserId)
+        .maybeSingle();
+
+      if (!error && data) {
+        console.log('🔍 isOnboardingCompleted - Supabase value:', data.is_onboarding_completed);
+        return data.is_onboarding_completed === true;
+      }
+      // User not found in DB or error — fall through to AsyncStorage
+    }
+
+    // Fallback: AsyncStorage (offline or user not yet in DB)
     const completed = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+    console.log('🔍 isOnboardingCompleted - AsyncStorage fallback:', completed);
     return completed === 'true';
   } catch (error) {
     console.error('Error checking onboarding status:', error);
@@ -937,18 +978,34 @@ export async function isOnboardingCompleted(): Promise<boolean> {
   }
 }
 
-export async function setOnboardingCompleted(): Promise<void> {
+export async function setOnboardingCompleted(userId: string): Promise<void> {
   try {
+    console.log('💾 setOnboardingCompleted - SAVING to Supabase + AsyncStorage');
+
+    // Primary: update Supabase users table
+    await updateUser(userId, { IsOnboardingCompleted: true });
+
+    // Local cache: AsyncStorage for fast offline reads
     await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+    console.log('✅ setOnboardingCompleted - Saved to both Supabase and AsyncStorage');
   } catch (error) {
     console.error('Error setting onboarding completed:', error);
     throw error;
   }
 }
 
-export async function resetOnboarding(): Promise<void> {
+export async function resetOnboarding(userId?: string): Promise<void> {
   try {
+    console.log('🗑️ resetOnboarding - CLEARING from Supabase + AsyncStorage');
+
+    // Clear Supabase if userId provided
+    if (userId) {
+      await updateUser(userId, { IsOnboardingCompleted: false });
+    }
+
+    // Always clear AsyncStorage
     await AsyncStorage.removeItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+    console.log('✅ resetOnboarding - Cleared');
   } catch (error) {
     console.error('Error resetting onboarding:', error);
     throw error;
@@ -1114,8 +1171,8 @@ export async function initializeDemoData(): Promise<void> {
     
     // Create default pet
     await createPet('Our Pet', household.HouseholdID);
-    
-    await setOnboardingCompleted();
+
+    await setOnboardingCompleted(mainUser.UserID);
   } catch (error) {
     console.error('Error initializing demo data:', error);
     throw error;

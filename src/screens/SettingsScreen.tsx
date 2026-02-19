@@ -461,7 +461,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
             try {
               await clearCurrentUserId();
               await clearCurrentHouseholdId();
-              await resetOnboarding();
+              // NOTE: Do NOT call resetOnboarding() here.
+              // The onboarding flag must persist so returning users skip onboarding on re-login.
+              // resetOnboarding() is only for explicit dev resets.
               await authSignOut();
               onClose();
               if (onResetOnboarding) {

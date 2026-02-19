@@ -5,17 +5,22 @@
 // Version: 2.1.0 - Settings Screen Integration
 // Version: 2.2.0 - Notifications Panel Integration
 // Version: 3.0.0 - Supabase Auth Integration (three-state routing)
+// Version: 3.1.0 - Fix new user onboarding detection (check DB, not just AsyncStorage)
+// Version: 3.2.0 - Log out orphaned users (authenticated but missing from DB)
+// Version: 3.3.0 - Allow new users to proceed to OnboardingFlow (they will be created during onboarding)
+// Version: 3.4.0 - Detect orphaned users (completed onboarding but database missing) and log them out
 
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { supabase } from './src/lib/supabaseClient';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { OnboardingFlow } from './src/screens/OnboardingFlow';
 import { StyledStatusScreen } from './src/screens/StatusScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { NotificationsPanel } from './src/screens/NotificationsPanel';
-import { isOnboardingCompleted, resetOnboarding } from './src/lib/database';
+import { isOnboardingCompleted, resetOnboarding, userExistsInDatabase } from './src/lib/database';
 
 export default function App() {
   return (
@@ -28,7 +33,7 @@ export default function App() {
 }
 
 function AppRouter() {
-  const { isAuthenticated, isEmailVerified, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isEmailVerified, user, isLoading: authLoading } = useAuth();
 
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
@@ -37,20 +42,48 @@ function AppRouter() {
 
   // Check onboarding status when authenticated + verified
   useEffect(() => {
-    if (isAuthenticated && isEmailVerified) {
+    if (isAuthenticated && isEmailVerified && user?.id) {
       checkOnboardingStatus();
     } else {
       setCheckingOnboarding(false);
       setOnboardingComplete(false);
     }
-  }, [isAuthenticated, isEmailVerified]);
+  }, [isAuthenticated, isEmailVerified, user?.id]);
 
   const checkOnboardingStatus = async () => {
     try {
-      const completed = await isOnboardingCompleted();
-      setOnboardingComplete(completed);
+      // Check if user exists in our database
+      const userExists = await userExistsInDatabase(user?.id);
+      console.log('🔍 checkOnboardingStatus - User in DB?', userExists);
+
+      if (!userExists) {
+        // User not in DB — either brand new or orphaned
+        // Check AsyncStorage as a hint for orphaned user detection
+        const wasOnboardingCompleted = await isOnboardingCompleted();
+        console.log('🔍 checkOnboardingStatus - Onboarding was completed before?', wasOnboardingCompleted);
+
+        if (wasOnboardingCompleted) {
+          // Orphaned user: auth exists but DB records are gone
+          console.warn('⚠️ ORPHANED USER DETECTED: Auth exists but database records missing. Logging out.');
+          const { error } = await supabase.auth.signOut();
+          if (error) {
+            console.error('❌ Error signing out orphaned user:', error);
+          }
+          await resetOnboarding();
+          setOnboardingComplete(false);
+        } else {
+          // Brand new user — just signed up, hasn't completed onboarding yet
+          console.log('✅ New user detected - proceeding to onboarding');
+          setOnboardingComplete(false);
+        }
+      } else {
+        // User exists in DB — check is_onboarding_completed field (source of truth)
+        const completed = await isOnboardingCompleted(user?.id);
+        console.log('✅ User exists in DB - onboarding completed?', completed);
+        setOnboardingComplete(completed);
+      }
     } catch (error) {
-      console.error('Error checking onboarding status:', error);
+      console.error('❌ Error checking onboarding status:', error);
     } finally {
       setCheckingOnboarding(false);
     }

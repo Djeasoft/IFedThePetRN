@@ -125,9 +125,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       // Set as current user
       await setCurrentUserId(user.UserID);
-      await setOnboardingCompleted();
+      console.log('📝 OnboardingFlow.handleMainMemberComplete - About to call setOnboardingCompleted()');
+      await setOnboardingCompleted(user.UserID);
+      console.log('✅ OnboardingFlow.handleMainMemberComplete - setOnboardingCompleted() completed successfully');
 
+      console.log('📝 OnboardingFlow.handleMainMemberComplete - About to call onComplete()');
       onComplete();
+      console.log('✅ OnboardingFlow.handleMainMemberComplete - onComplete() called');
     } catch (err) {
       setError('Something went wrong. Please try again.');
       console.error('Main member creation error:', err);
@@ -180,9 +184,13 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       // Set as current user
       await setCurrentUserId(user.UserID);
-      await setOnboardingCompleted();
+      console.log('📝 OnboardingFlow.handleMemberComplete - About to call setOnboardingCompleted()');
+      await setOnboardingCompleted(user.UserID);
+      console.log('✅ OnboardingFlow.handleMemberComplete - setOnboardingCompleted() completed successfully');
 
+      console.log('📝 OnboardingFlow.handleMemberComplete - About to call onComplete()');
       onComplete();
+      console.log('✅ OnboardingFlow.handleMemberComplete - onComplete() called');
     } catch (err) {
       setError('Something went wrong. Please try again.');
       console.error('Member join error:', err);

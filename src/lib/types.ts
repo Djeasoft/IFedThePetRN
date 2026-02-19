@@ -10,6 +10,7 @@ export interface User {
   MemberName: string;
   EmailAddress: string;
   IsMainMember: boolean;
+  IsOnboardingCompleted: boolean;
   InvitationStatus: InvitationStatus;
   NotificationPreferences?: NotificationPreferences;
   DateCreated: string;

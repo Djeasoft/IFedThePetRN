@@ -1,5 +1,6 @@
 // AuthScreen.tsx - Landing, Sign Up, Login, Email Verification, Password Reset
 // Version: 1.0.0 - Supabase Auth with Email/Password, Apple, Google
+// Version: 1.1.0 - Create user record in database immediately upon signup (not during onboarding)
 
 import React, { useState, useEffect } from 'react';
 import {
@@ -30,6 +31,7 @@ import {
   resendVerificationEmail,
   refreshSession,
 } from '../lib/auth';
+import { createUser } from '../lib/database';
 import { useAuth } from '../contexts/AuthContext';
 
 type AuthStep = 'landing' | 'signup' | 'login' | 'verification' | 'reset-password';
@@ -92,10 +94,26 @@ export function AuthScreen() {
     setLoading(true);
     setError('');
     try {
-      await signUpWithEmail(trimmedEmail, password);
+      // Step 1: Create auth user
+      const signupData = await signUpWithEmail(trimmedEmail, password);
+      
+      // Step 2: Create user record in database with auth_user_id
+      // Member name will be filled in during onboarding
+      if (signupData.user?.id) {
+        await createUser(
+          '', // Empty name - will be set during onboarding
+          trimmedEmail,
+          false, // Not main member yet - will be set during onboarding
+          'Active',
+          signupData.user.id // Link to auth user
+        );
+        console.log('✅ User account created in database');
+      }
+      
       setStep('verification');
     } catch (err: any) {
       setError(err.message || 'Sign up failed. Please try again.');
+      console.error('Sign up error:', err);
     } finally {
       setLoading(false);
     }
