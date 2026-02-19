@@ -25,6 +25,7 @@ const STORAGE_KEYS = {
 const mapUser = (data: any): User => ({
   UserID: data.id,
   UUID: data.id,
+  AuthUserID: data.auth_user_id ?? undefined,
   MemberName: data.member_name,
   EmailAddress: data.email_address,
   IsMainMember: data.is_main_member,
@@ -140,27 +141,51 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
+export async function getUserByAuthId(authUserId: string): Promise<User | null> {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_user_id', authUserId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error getting user by auth ID:', error.message);
+      return null;
+    }
+
+    return data ? mapUser(data) : null;
+  } catch (error) {
+    console.error('Error in getUserByAuthId:', error);
+    return null;
+  }
+}
+
 export async function createUser(
   memberName: string,
   emailAddress: string,
   isMainMember: boolean,
-  invitationStatus: 'Active' | 'Pending' = 'Active'
+  invitationStatus: 'Active' | 'Pending' = 'Active',
+  authUserId?: string
 ): Promise<User> {
   try {
+    const insertData: Record<string, any> = {
+      member_name: memberName,
+      email_address: emailAddress.toLowerCase(),
+      is_main_member: isMainMember,
+      invitation_status: invitationStatus,
+      notification_prefs: {
+        feedingNotifications: true,
+        memberJoinedNotifications: true,
+      },
+    };
+    if (authUserId) {
+      insertData.auth_user_id = authUserId;
+    }
+
     const { data, error } = await supabase
       .from('users')
-      .insert([
-        {
-          member_name: memberName,
-          email_address: emailAddress.toLowerCase(),
-          is_main_member: isMainMember,
-          invitation_status: invitationStatus,
-          notification_prefs: {
-            feedingNotifications: true,
-            memberJoinedNotifications: true,
-          },
-        },
-      ])
+      .insert([insertData])
       .select()
       .single();
 
@@ -186,6 +211,7 @@ export async function updateUser(userId: string, updates: Partial<User>): Promis
     if (updates.IsMainMember !== undefined) cloudUpdates.is_main_member = updates.IsMainMember;
     if (updates.InvitationStatus !== undefined) cloudUpdates.invitation_status = updates.InvitationStatus;
     if (updates.NotificationPreferences !== undefined) cloudUpdates.notification_prefs = updates.NotificationPreferences;
+    if (updates.AuthUserID !== undefined) cloudUpdates.auth_user_id = updates.AuthUserID;
 
     if (Object.keys(cloudUpdates).length === 0) {
       // No updates provided

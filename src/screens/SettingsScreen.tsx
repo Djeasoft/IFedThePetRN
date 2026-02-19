@@ -50,6 +50,7 @@ import {
   clearCurrentHouseholdId
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
+import { signOut as authSignOut } from '../lib/auth';
 import { useTheme } from '../contexts/ThemeContext';
 import { Switch } from '../components/Switch';
 import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
@@ -460,6 +461,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
             try {
               await clearCurrentUserId();
               await clearCurrentHouseholdId();
+              await resetOnboarding();
+              await authSignOut();
               onClose();
               if (onResetOnboarding) {
                 onResetOnboarding();

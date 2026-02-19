@@ -4,8 +4,9 @@
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
 export interface User {
-  UserID: string; 
+  UserID: string;
   UUID: string;
+  AuthUserID?: string;
   MemberName: string;
   EmailAddress: string;
   IsMainMember: boolean;

@@ -1,6 +1,7 @@
 // OnboardingFlow.tsx
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - Added resetToNewUser() for dev/testing, new method getUserByEmail
+// Version: 3.0.0 - Supabase Auth integration, removed email step (email from auth)
 
 import React, { useState } from 'react';
 import {
@@ -12,10 +13,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemeColors } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Logo } from '../components/Logo';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
@@ -35,7 +36,7 @@ import {
 } from '../lib/database';
 
 type OnboardingMode = 'main' | 'member';
-type OnboardingStep = 'welcome' | 'name' | 'email' | 'household' | 'invite-code';
+type OnboardingStep = 'welcome' | 'name' | 'household' | 'invite-code';
 
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -43,16 +44,19 @@ interface OnboardingFlowProps {
 
 export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const theme = useThemeColors();
-  
+  const { user: authUser } = useAuth();
+
   const [mode, setMode] = useState<OnboardingMode | null>(null);
   const [step, setStep] = useState<OnboardingStep>('welcome');
   const [formData, setFormData] = useState({
     name: '',
-    email: '',
     householdName: '',
     inviteCode: '',
   });
   const [error, setError] = useState('');
+
+  // Email comes from Supabase Auth
+  const email = authUser?.email ?? '';
 
   // Mode selection handlers
   const handleModeSelection = (selectedMode: OnboardingMode) => {
@@ -65,49 +69,27 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     if (step === 'name') {
       setStep('welcome');
       setMode(null);
-    } else if (step === 'email') {
-      setStep('name');
     } else if (step === 'household' || step === 'invite-code') {
-      setStep('email');
+      setStep('name');
     }
     setError('');
   };
 
-  // Name step handler
+  // Name step handler - go directly to household/invite (skip email)
   const handleNameContinue = () => {
     if (formData.name.trim()) {
-      setStep('email');
+      if (mode === 'main') {
+        setStep('household');
+      } else {
+        setStep('invite-code');
+      }
       setError('');
     }
-  };
-
-  // Email step handler
-  const handleEmailContinue = () => {
-    const email = formData.email.trim().toLowerCase();
-    if (!email) {
-      setError('Please enter your email');
-      return;
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (mode === 'main') {
-      setStep('household');
-    } else {
-      setStep('invite-code');
-    }
-    setError('');
   };
 
   // Main member completion handler
   const handleMainMemberComplete = async () => {
     const name = formData.name.trim();
-    const email = formData.email.trim().toLowerCase();
     const householdName = formData.householdName.trim();
 
     if (!householdName) {
@@ -118,17 +100,18 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     try {
       // Check if user already exists (e.g., after a reset)
       let user = await getUserByEmail(email);
-      
+
       if (user) {
         // Update existing user with new name and main member status
         await updateUser(user.UserID, {
           MemberName: name,
           IsMainMember: true,
           InvitationStatus: 'Active',
+          AuthUserID: authUser?.id,
         });
       } else {
         // Create new main member user
-        user = await createUser(name, email, true, 'Active');
+        user = await createUser(name, email, true, 'Active', authUser?.id);
       }
 
       // Create household
@@ -154,7 +137,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Member completion handler
   const handleMemberComplete = async () => {
     const name = formData.name.trim();
-    const email = formData.email.trim().toLowerCase();
     const inviteCode = formData.inviteCode.trim().toUpperCase();
 
     if (!inviteCode) {
@@ -172,16 +154,17 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       // Check if user already exists
       let user = await getUserByEmail(email);
-      
+
       if (user) {
         // Update existing user
         await updateUser(user.UserID, {
           MemberName: name,
           InvitationStatus: 'Active',
+          AuthUserID: authUser?.id,
         });
       } else {
         // Create new user
-        user = await createUser(name, email, false, 'Active');
+        user = await createUser(name, email, false, 'Active', authUser?.id);
       }
 
       // Link user to household
@@ -211,8 +194,6 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     switch (step) {
       case 'name':
         return formData.name.trim();
-      case 'email':
-        return formData.email.trim();
       case 'household':
         return formData.householdName.trim();
       case 'invite-code':
@@ -337,60 +318,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </View>
             )}
 
-            {/* STEP 3: Email Input */}
-            {step === 'email' && (
-              <View style={styles.stepContainer}>
-                <TouchableOpacity
-                  onPress={handleBack}
-                  style={styles.backButton}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="chevron-back" size={20} color={theme.textSecondary} />
-                  <Text style={[styles.backText, { color: theme.textSecondary }]}>Back</Text>
-                </TouchableOpacity>
-
-                <View style={styles.headingSection}>
-                  <Text style={[styles.heading, { color: theme.text }]}>
-                    What's your email?
-                  </Text>
-                  <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-                    {mode === 'main'
-                      ? 'Used for inviting others to your household'
-                      : 'Make sure this matches your invitation'}
-                  </Text>
-                </View>
-
-                <View style={styles.formSection}>
-                  <Input
-                    value={formData.email}
-                    onChangeText={(text) => {
-                      setFormData({ ...formData, email: text });
-                      setError('');
-                    }}
-                    placeholder="your@email.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoFocus
-                    returnKeyType="next"
-                    onSubmitEditing={() => canContinue() && handleEmailContinue()}
-                    error={error}
-                  />
-
-                  <Button
-                    onPress={handleEmailContinue}
-                    disabled={!canContinue()}
-                    variant="primary"
-                    size="lg"
-                    fullWidth
-                  >
-                    Continue
-                  </Button>
-                </View>
-              </View>
-            )}
-
-            {/* STEP 4: Household Name (Main Member Only) */}
+            {/* STEP 3: Household Name (Main Member Only) */}
             {step === 'household' && (
               <View style={styles.stepContainer}>
                 <TouchableOpacity
@@ -438,7 +366,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               </View>
             )}
 
-            {/* STEP 5: Invitation Code (Member Only) */}
+            {/* STEP 4: Invitation Code (Member Only) */}
             {step === 'invite-code' && (
               <View style={styles.stepContainer}>
                 <TouchableOpacity
@@ -519,7 +447,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 400,
   },
-  
+
   // Back button
   backButton: {
     flexDirection: 'row',
@@ -530,7 +458,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginLeft: spacing.xs,
   },
-  
+
   // Headings
   headingSection: {
     alignItems: 'center',
@@ -547,7 +475,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.base,
   },
-  
+
   // Cards (Welcome screen)
   cardsContainer: {
     width: '100%',
@@ -568,13 +496,13 @@ const styles = StyleSheet.create({
   cardSubtitle: {
     fontSize: fontSize.base,
   },
-  
+
   // Form section
   formSection: {
     width: '100%',
     gap: spacing.lg,
   },
-  
+
   // Special styling for invite code
   inviteCodeInput: {
     textAlign: 'center',

@@ -3,6 +3,7 @@
     "name": "I Fed The Pet",
     "slug": "IFedThePet",
     "version": "1.0.0",
+    "scheme": "com.djeasoft.ifedthepet",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.djeasoft.ifedthepet",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -41,6 +43,9 @@
     },
     "updates": {
       "url": "https://u.expo.dev/7db1316c-c147-4e21-9c05-7fd44d6b837f"
-    }
+    },
+    "plugins": [
+      "expo-web-browser"
+    ]
   }
 }
