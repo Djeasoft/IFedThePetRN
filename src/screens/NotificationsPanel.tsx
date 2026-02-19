@@ -1,5 +1,7 @@
 // NotificationsPanel - Slide-in Notifications View
 // Version: 1.0.0 - React Native with Theme Support
+// Version: 2.0.0 - Supabase integration with per-user read tracking
+// Version: 2.1.0 - Cross-household: shows notifications from ALL user's households
 // Shows all notifications with mark as read functionality
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -14,9 +16,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  getAllNotifications,
+  getAllNotificationsForUser,
   markNotificationAsRead,
-  markAllNotificationsAsRead,
+  markAllNotificationsAsReadForUser,
 } from '../lib/database';
 import { Notification } from '../lib/types';
 import { formatTime, getTimeAgo } from '../lib/time';
@@ -26,25 +28,33 @@ import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
 interface NotificationsPanelProps {
   visible: boolean;
   onClose: () => void;
+  userId?: string;
 }
 
-export function NotificationsPanel({ visible, onClose }: NotificationsPanelProps) {
+export function NotificationsPanel({ visible, onClose, userId }: NotificationsPanelProps) {
   const { theme } = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load notifications
+  // Load notifications from ALL households
   const loadNotifications = useCallback(async () => {
+    if (!userId) {
+      console.log('🔔 NotificationsPanel: No userId, skipping load');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      const allNotifications = await getAllNotifications();
+      console.log('🔔 NotificationsPanel: Loading notifications for userId:', userId);
+      const allNotifications = await getAllNotificationsForUser(userId);
+      console.log('🔔 NotificationsPanel: Loaded', allNotifications.length, 'notifications');
       setNotifications(allNotifications);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     if (visible) {
@@ -54,8 +64,9 @@ export function NotificationsPanel({ visible, onClose }: NotificationsPanelProps
 
   // Mark single notification as read
   const handleMarkAsRead = async (notificationId: string) => {
+    if (!userId) return;
     try {
-      await markNotificationAsRead(notificationId);
+      await markNotificationAsRead(notificationId, userId);
       setNotifications((prev) =>
         prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
       );
@@ -64,10 +75,11 @@ export function NotificationsPanel({ visible, onClose }: NotificationsPanelProps
     }
   };
 
-  // Mark all as read
+  // Mark all as read (across all households)
   const handleMarkAllAsRead = async () => {
+    if (!userId) return;
     try {
-      await markAllNotificationsAsRead();
+      await markAllNotificationsAsReadForUser(userId);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (error) {
       console.error('Error marking all notifications as read:', error);

@@ -298,10 +298,10 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
 
       // Add notification
       await addNotification({
+        householdId: household.HouseholdID,
         type: 'member_joined',
         message: `Invitation sent to ${name}`,
         memberName: name,
-        read: false,
       });
 
       setShowInviteModal(false);
@@ -339,10 +339,10 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
 
               // Add in-app notification
               await addNotification({
+                householdId: household.HouseholdID,
                 type: 'member_removed',
                 message: `${member.MemberName} was removed from the household`,
                 memberName: member.MemberName,
-                read: false,
               });
 
               loadData();

@@ -2,6 +2,7 @@
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - React Web to React Native
 // Version: 3.0.0 - Multi-Household Switcher Implementation
+// Version: 3.1.0 - Fix: onStatusReady callback, one-time legacy cleanup
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -24,6 +25,7 @@ import {
   getUserById,
   addNotification,
   getUnreadNotificationsCount,
+  clearLegacyNotificationData,
   addFeedingEvent,
   getFeedingEventsByHouseholdId,
   undoFeedingEvent,
@@ -42,6 +44,7 @@ import { useTheme } from '../contexts/ThemeContext';
 interface StyledStatusScreenProps {
   onOpenSettings: () => void;
   onOpenNotifications: () => void;
+  onStatusReady?: (userId: string, householdId: string) => void;
 }
 
 interface HistoryEventDetails {
@@ -65,6 +68,7 @@ interface StatusScreenCache {
 export function StyledStatusScreen({
   onOpenSettings,
   onOpenNotifications,
+  onStatusReady,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
 
@@ -91,6 +95,7 @@ export function StyledStatusScreen({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isOperationInFlight, setIsOperationInFlight] = useState(false);
   const suppressNextRealtimeLoad = useRef(false);
+  const legacyCleanupDone = useRef(false);
 
   // Helper function to resolve event details
   const resolveEventDetails = async (event: FeedingEvent): Promise<{
@@ -116,6 +121,12 @@ export function StyledStatusScreen({
   // 1. Unified Loading Function (with cache-first pattern)
   const loadData = async (options?: { skipCache?: boolean }) => {
     try {
+      // One-time: clear legacy AsyncStorage notifications and stale cache
+      if (!legacyCleanupDone.current) {
+        legacyCleanupDone.current = true;
+        await clearLegacyNotificationData();
+      }
+
       const skipCache = options?.skipCache ?? false;
 
       // Step 1: Try cache first for instant display (FIXED: removed && loading)
@@ -174,11 +185,14 @@ export function StyledStatusScreen({
       setCurrentHouseholdId(currentHousehold.HouseholdID);
       setIsPro(currentHousehold.IsSubscriptionPro);
 
+      // Notify App.tsx that IDs are ready (for NotificationsPanel)
+      onStatusReady?.(userId, currentHousehold.HouseholdID);
+
       // Fetch Pets and History for CURRENT household only
       const [householdPets, events, count] = await Promise.all([
         getPetsByHouseholdId(currentHousehold.HouseholdID),
         getFeedingEventsByHouseholdId(currentHousehold.HouseholdID),
-        getUnreadNotificationsCount()
+        getUnreadNotificationsCount(currentHousehold.HouseholdID, userId)
       ]);
 
       setPets(householdPets);
@@ -377,12 +391,12 @@ export function StyledStatusScreen({
         UndoDeadline: undoDeadline,
       });
 
-      // Fire-and-forget notification (AsyncStorage, very fast)
+      // Fire-and-forget notification
       addNotification({
+        householdId: household!.HouseholdID,
         type: 'feeding',
         message: `${currentUser.MemberName} fed...\n${petNames}`,
         petName: petNames,
-        read: false,
       });
 
       // Replace temp EventID with real Supabase ID

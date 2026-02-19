@@ -176,10 +176,10 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
       // Add notification for main member
       await addNotification({
+        householdId: household.HouseholdID,
         type: 'member_joined',
         message: `${name} joined ${household.HouseholdName}`,
         memberName: name,
-        read: false,
       });
 
       // Set as current user

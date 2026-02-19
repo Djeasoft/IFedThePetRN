@@ -666,103 +666,347 @@ export async function clearCurrentUserId(): Promise<void> {
   }
 }
 
-// ===== NOTIFICATIONS =====
+// ===== NOTIFICATIONS (Supabase) =====
 
-export async function getAllNotifications(): Promise<Notification[]> {
+const mapNotification = (data: any, isRead: boolean): Notification => ({
+  id: data.id,
+  householdId: data.household_id,
+  type: data.type,
+  message: data.message,
+  timestamp: data.created_at,
+  read: isRead,
+  petName: data.pet_name ?? undefined,
+  memberName: data.member_name ?? undefined,
+  requestedBy: data.requested_by ?? undefined,
+});
+
+export async function getAllNotifications(householdId: string, userId: string): Promise<Notification[]> {
   try {
-    const notificationsJson = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-    return notificationsJson ? JSON.parse(notificationsJson) : [];
+    // Query 1: Get all notifications for this household
+    const { data: notifications, error: notifError } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (notifError) {
+      console.error('Error fetching notifications:', notifError.message);
+      return [];
+    }
+    if (!notifications?.length) return [];
+
+    // Query 2: Get which of these the current user has read
+    const notifIds = notifications.map((n: any) => n.id);
+    const { data: reads, error: readsError } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .in('notification_id', notifIds);
+
+    if (readsError) {
+      console.error('Error fetching notification reads:', readsError.message);
+    }
+
+    // Build a set of read notification IDs for fast lookup
+    const readIds = new Set((reads || []).map((r: any) => r.notification_id));
+
+    return notifications.map((row: any) => mapNotification(row, readIds.has(row.id)));
   } catch (error) {
-    console.error('Error reading notifications:', error);
+    console.error('Error in getAllNotifications:', error);
     return [];
   }
 }
 
-export async function saveAllNotifications(notifications: Notification[]): Promise<void> {
+export async function addNotification(notification: Omit<Notification, 'id' | 'timestamp' | 'read'>): Promise<Notification> {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
-  } catch (error) {
-    console.error('Error saving notifications:', error);
-    throw error;
-  }
-}
-
-export async function addNotification(notification: Omit<Notification, 'id' | 'timestamp'>): Promise<Notification> {
-  try {
-    const notifications = await getAllNotifications();
-    const newNotification: Notification = {
-      ...notification,
-      id: generateUUID(),
-      timestamp: new Date().toISOString(),
+    const insertData: Record<string, any> = {
+      household_id: notification.householdId,
+      type: notification.type,
+      message: notification.message,
     };
-    notifications.unshift(newNotification);
-    
-    // Keep only last 50 notifications
-    const trimmedNotifications = notifications.slice(0, 50);
-    await saveAllNotifications(trimmedNotifications);
-    
-    return newNotification;
+    if (notification.petName) insertData.pet_name = notification.petName;
+    if (notification.memberName) insertData.member_name = notification.memberName;
+    if (notification.requestedBy) insertData.requested_by = notification.requestedBy;
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert([insertData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding notification:', error.message);
+      throw error;
+    }
+
+    return mapNotification(data, false);
   } catch (error) {
-    console.error('Error adding notification:', error);
+    console.error('Error in addNotification:', error);
     throw error;
   }
 }
 
-export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
+export async function getUnreadNotificationsCount(householdId: string, userId: string): Promise<number> {
   try {
-    const notifications = await getAllNotifications();
-    const index = notifications.findIndex((n) => n.id === notificationId);
-    if (index === -1) return false;
-    
-    notifications[index] = { ...notifications[index], read: true };
-    await saveAllNotifications(notifications);
+    // Query 1: Get all notification IDs for this household
+    const { data: notifications, error: notificationsError } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('household_id', householdId);
+
+    if (notificationsError) {
+      console.error('Error fetching notification IDs:', notificationsError.message);
+      return 0;
+    }
+    if (!notifications?.length) return 0;
+
+    // Query 2: Get which of these the user has read
+    const notificationIds = notifications.map((n: any) => n.id);
+    const { data: reads, error: readsError } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .in('notification_id', notificationIds);
+
+    if (readsError) {
+      console.error('Error fetching read status:', readsError.message);
+      return notifications.length; // Assume all unread on error
+    }
+
+    return notifications.length - (reads?.length ?? 0);
+  } catch (error) {
+    console.error('Error in getUnreadNotificationsCount:', error);
+    return 0;
+  }
+}
+
+export async function markNotificationAsRead(notificationId: string, userId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('notification_reads')
+      .upsert(
+        { notification_id: notificationId, user_id: userId },
+        { onConflict: 'notification_id,user_id' }
+      );
+
+    if (error) {
+      console.error('Error marking notification as read:', error.message);
+      return false;
+    }
     return true;
   } catch (error) {
-    console.error('Error marking notification as read:', error);
+    console.error('Error in markNotificationAsRead:', error);
+    return false;
+  }
+}
+
+export async function markAllNotificationsAsRead(householdId: string, userId: string): Promise<void> {
+  try {
+    // Get all unread notification IDs for this household
+    const { data: notifications, error: fetchError } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('household_id', householdId);
+
+    if (fetchError || !notifications?.length) return;
+
+    // Upsert read records for all of them
+    const reads = notifications.map((n: any) => ({
+      notification_id: n.id,
+      user_id: userId,
+    }));
+
+    const { error } = await supabase
+      .from('notification_reads')
+      .upsert(reads, { onConflict: 'notification_id,user_id' });
+
+    if (error) {
+      console.error('Error marking all as read:', error.message);
+    }
+  } catch (error) {
+    console.error('Error in markAllNotificationsAsRead:', error);
     throw error;
   }
 }
 
-export async function markAllNotificationsAsRead(): Promise<void> {
+// ===== CROSS-HOUSEHOLD NOTIFICATION FUNCTIONS =====
+// These fetch notifications from ALL households the user belongs to
+
+export async function getAllNotificationsForUser(userId: string): Promise<Notification[]> {
   try {
-    const notifications = await getAllNotifications();
-    const updatedNotifications = notifications.map((n) => ({ ...n, read: true }));
-    await saveAllNotifications(updatedNotifications);
+    // Step 1: Get all household IDs this user belongs to
+    const { data: links, error: linkError } = await supabase
+      .from('user_households')
+      .select('household_id')
+      .eq('user_id', userId);
+
+    if (linkError || !links?.length) {
+      console.log('🔔 getAllNotificationsForUser: No households found for user');
+      return [];
+    }
+
+    const householdIds = links.map((l: any) => l.household_id);
+    console.log('🔔 getAllNotificationsForUser: User belongs to', householdIds.length, 'households');
+
+    // Step 2: Get notifications from ALL those households
+    const { data: notifications, error: notifError } = await supabase
+      .from('notifications')
+      .select('*')
+      .in('household_id', householdIds)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (notifError) {
+      console.error('Error fetching cross-household notifications:', notifError.message);
+      return [];
+    }
+    if (!notifications?.length) return [];
+
+    // Step 3: Get which of these the user has read
+    const notifIds = notifications.map((n: any) => n.id);
+    const { data: reads, error: readsError } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .in('notification_id', notifIds);
+
+    if (readsError) {
+      console.error('Error fetching notification reads:', readsError.message);
+    }
+
+    const readIds = new Set((reads || []).map((r: any) => r.notification_id));
+
+    return notifications.map((row: any) => mapNotification(row, readIds.has(row.id)));
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
-    throw error;
+    console.error('Error in getAllNotificationsForUser:', error);
+    return [];
   }
 }
 
-export async function getUnreadNotificationsCount(): Promise<number> {
+export async function getUnreadNotificationsCountForUser(userId: string): Promise<number> {
   try {
-    const notifications = await getAllNotifications();
-    return notifications.filter((n) => !n.read).length;
+    // Step 1: Get all household IDs for this user
+    const { data: links, error: linkError } = await supabase
+      .from('user_households')
+      .select('household_id')
+      .eq('user_id', userId);
+
+    if (linkError || !links?.length) return 0;
+
+    const householdIds = links.map((l: any) => l.household_id);
+
+    // Step 2: Get all notification IDs across those households
+    const { data: notifications, error: notifError } = await supabase
+      .from('notifications')
+      .select('id')
+      .in('household_id', householdIds);
+
+    if (notifError || !notifications?.length) return 0;
+
+    // Step 3: Get which the user has read
+    const notifIds = notifications.map((n: any) => n.id);
+    const { data: reads, error: readsError } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', userId)
+      .in('notification_id', notifIds);
+
+    if (readsError) return notifications.length; // Assume all unread on error
+
+    return notifications.length - (reads?.length ?? 0);
   } catch (error) {
-    console.error('Error getting unread notifications count:', error);
+    console.error('Error in getUnreadNotificationsCountForUser:', error);
     return 0;
+  }
+}
+
+export async function markAllNotificationsAsReadForUser(userId: string): Promise<void> {
+  try {
+    // Step 1: Get all household IDs for this user
+    const { data: links, error: linkError } = await supabase
+      .from('user_households')
+      .select('household_id')
+      .eq('user_id', userId);
+
+    if (linkError || !links?.length) return;
+
+    const householdIds = links.map((l: any) => l.household_id);
+
+    // Step 2: Get all notification IDs across those households
+    const { data: notifications, error: notifError } = await supabase
+      .from('notifications')
+      .select('id')
+      .in('household_id', householdIds);
+
+    if (notifError || !notifications?.length) return;
+
+    // Step 3: Upsert read records for all of them
+    const reads = notifications.map((n: any) => ({
+      notification_id: n.id,
+      user_id: userId,
+    }));
+
+    const { error } = await supabase
+      .from('notification_reads')
+      .upsert(reads, { onConflict: 'notification_id,user_id' });
+
+    if (error) {
+      console.error('Error marking all as read for user:', error.message);
+    }
+  } catch (error) {
+    console.error('Error in markAllNotificationsAsReadForUser:', error);
+    throw error;
   }
 }
 
 export async function deleteNotification(notificationId: string): Promise<boolean> {
   try {
-    const notifications = await getAllNotifications();
-    const filtered = notifications.filter((n) => n.id !== notificationId);
-    if (filtered.length === notifications.length) return false;
-    await saveAllNotifications(filtered);
+    const { error } = await supabase
+      .from('notifications')
+      .delete()
+      .eq('id', notificationId);
+
+    if (error) {
+      console.error('Error deleting notification:', error.message);
+      return false;
+    }
     return true;
   } catch (error) {
-    console.error('Error deleting notification:', error);
+    console.error('Error in deleteNotification:', error);
+    return false;
+  }
+}
+
+export async function clearAllNotifications(householdId?: string): Promise<void> {
+  try {
+    if (householdId) {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('household_id', householdId);
+
+      if (error) {
+        console.error('Error clearing notifications:', error.message);
+      }
+    }
+    // Also clear legacy AsyncStorage notifications
+    await AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+  } catch (error) {
+    console.error('Error in clearAllNotifications:', error);
     throw error;
   }
 }
 
-export async function clearAllNotifications(): Promise<void> {
+// One-time cleanup: remove legacy AsyncStorage notification data and stale screen cache
+export async function clearLegacyNotificationData(): Promise<void> {
   try {
     await AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+    await AsyncStorage.removeItem(CACHE_KEYS.STATUS_SCREEN);
+    console.log('✅ Cleared legacy notification data and stale screen cache');
   } catch (error) {
-    console.error('Error clearing all notifications:', error);
-    throw error;
+    // Non-critical — don't throw
+    console.error('Error clearing legacy notification data:', error);
   }
 }
 

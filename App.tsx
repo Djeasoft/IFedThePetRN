@@ -9,6 +9,7 @@
 // Version: 3.2.0 - Log out orphaned users (authenticated but missing from DB)
 // Version: 3.3.0 - Allow new users to proceed to OnboardingFlow (they will be created during onboarding)
 // Version: 3.4.0 - Detect orphaned users (completed onboarding but database missing) and log them out
+// Version: 3.5.0 - Fix notifications: get IDs from StatusScreen ready callback, not one-time useEffect
 
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
@@ -39,6 +40,9 @@ function AppRouter() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  // FIX: These are now set by StatusScreen when data is ready, not a one-time useEffect
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentHouseholdId, setCurrentHouseholdId] = useState<string | null>(null);
 
   // Check onboarding status when authenticated + verified
   useEffect(() => {
@@ -115,6 +119,13 @@ function AppRouter() {
     setShowNotifications(false);
   };
 
+  // FIX: Callback from StatusScreen when data is loaded and IDs are known
+  // This ensures we always have fresh IDs, even after household switching
+  const handleStatusReady = (userId: string, householdId: string) => {
+    if (userId !== currentUserId) setCurrentUserId(userId);
+    if (householdId !== currentHouseholdId) setCurrentHouseholdId(householdId);
+  };
+
   // Loading state
   if (authLoading || (isAuthenticated && isEmailVerified && checkingOnboarding)) {
     return (
@@ -140,6 +151,7 @@ function AppRouter() {
       <StyledStatusScreen
         onOpenSettings={handleOpenSettings}
         onOpenNotifications={handleOpenNotifications}
+        onStatusReady={handleStatusReady}
       />
       <SettingsScreen
         visible={showSettings}
@@ -149,6 +161,7 @@ function AppRouter() {
       <NotificationsPanel
         visible={showNotifications}
         onClose={handleCloseNotifications}
+        userId={currentUserId ?? undefined}
       />
     </>
   );

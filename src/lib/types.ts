@@ -57,10 +57,11 @@ export interface Pet {
 
 export interface Notification {
   id: string;
+  householdId: string;
   type: 'feeding' | 'member_joined' | 'pet_added' | 'member_removed' | 'feed_request';
   message: string;
   timestamp: string;
-  read: boolean;
+  read: boolean; // Computed per-user from notification_reads table
   petName?: string;
   memberName?: string;
   requestedBy?: string;
