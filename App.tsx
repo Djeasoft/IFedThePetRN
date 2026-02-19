@@ -43,6 +43,7 @@ function AppRouter() {
   // Check onboarding status when authenticated + verified
   useEffect(() => {
     if (isAuthenticated && isEmailVerified && user?.id) {
+      setCheckingOnboarding(true);
       checkOnboardingStatus();
     } else {
       setCheckingOnboarding(false);
