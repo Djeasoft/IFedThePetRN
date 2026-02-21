@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Saturday, 21 February 2026, 18:30 GMT
+**Last Updated:** Saturday, 21 February 2026, 19:30 GMT
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — Item 1
+**Next Session:** Pick up from WHAT'S NEXT — Item 3
 
 ---
 
@@ -55,7 +55,7 @@ What is **not** working:
 | 4 | Notification bell badge count does not reset after marking all read | 🔴 Critical | Badge remains stale until app reload |
 | 5 | "Ask member to feed" notification not received by the other user | 🟠 High | Feature is stubbed — UI fires local Alert only, no server-side trigger |
 | 6 | New household member inherits stale notification count from previous sessions | 🟡 Minor | Henry joined and saw 12 unread from Daniel's prior activity |
-| 7 | Email invitations not sending | 🟡 Minor | Workaround confirmed: household code join works perfectly |
+| 7 | Email invitations not sending | 🟠 High | `handleInviteMember` creates the pending user + household link correctly but never sends an email. `sendEmail()` in `database.ts` is a mock (console.log only). Fix requires Supabase Edge Function + SMTP. See Item 8 in What's Next. |
 
 ---
 
@@ -76,6 +76,12 @@ What is **not** working:
 - [ ] **6. Fix stale notification inheritance for new members** — When a user joins a household via code, only show notifications from their join date onward, or mark all prior notifications as read on join.
 
 - [ ] **7. Plan Phase B** — Once Items 3–5 are resolved and re-tested with Dan, open Phase B planning: Apple/Google OAuth, React Navigation, component extraction, and MVP prep.
+
+- [ ] **8. Wire up email invitations** — `handleInviteMember` in `SettingsScreen.tsx` already creates the pending user and household link correctly. What's missing is the actual email send. Plan agreed: Supabase Edge Function (`send-invite-email`) calling Supabase's built-in SMTP. **Prerequisites before starting:**
+  - Install Supabase CLI — `npm install -g supabase` does NOT work on Windows. Use the Windows installer instead: https://github.com/supabase/cli#install-the-cli
+  - Configure SMTP in Supabase dashboard → Authentication → Settings → SMTP Settings (retrieve credentials from existing email provider first)
+  - Supabase Project ID: `dswbgtbrorhxxnargbdw`
+  - From address: `noreply@ifedthepet.app`
 
 ---
 
