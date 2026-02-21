@@ -164,7 +164,7 @@ export async function getUserByAuthId(authUserId: string): Promise<User | null> 
 
 export async function userExistsInDatabase(authUserId: string | undefined): Promise<boolean> {
   if (!authUserId) return false;
-  
+
   try {
     const { data, error } = await supabase
       .from('users')
@@ -640,8 +640,23 @@ export async function undoFeedPet(petId: string): Promise<Pet | null> {
 
 export async function getCurrentUserId(): Promise<string | null> {
   try {
-    const userId = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
-    return userId;
+    // 1. Try AsyncStorage first (fast path)
+    const storedId = await AsyncStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
+    if (storedId) return storedId;
+
+    // 2. Fallback: derive from live Supabase session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return null;
+
+    // Look up our internal user record using the auth ID
+    const user = await getUserByAuthId(session.user.id);
+    if (!user) return null;
+
+    // Re-hydrate AsyncStorage so next call is fast
+    await AsyncStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, user.UserID);
+    console.log('🔧 getCurrentUserId: re-hydrated from Supabase session -', user.UserID);
+
+    return user.UserID;
   } catch (error) {
     console.error('Error getting current user ID:', error);
     return null;
@@ -1133,7 +1148,7 @@ export async function addFeedReminder(reminder: Omit<FeedReminder, 'ReminderID' 
   try {
     const feedReminders = await getAllFeedReminders();
     const now = new Date().toISOString();
-    
+
     const newReminder: FeedReminder = {
       ...reminder,
       ReminderID: generateUUID(),
@@ -1166,7 +1181,7 @@ export async function updateFeedReminder(reminderId: string, updates: Partial<Fe
     const feedReminders = await getAllFeedReminders();
     const index = feedReminders.findIndex((r) => r.ReminderID === reminderId);
     if (index === -1) return null;
-    
+
     feedReminders[index] = {
       ...feedReminders[index],
       ...updates,
@@ -1267,24 +1282,24 @@ export async function resetOnboarding(userId?: string): Promise<void> {
 export async function resetToNewUser(): Promise<void> {
   try {
     console.log('🔄 Resetting to new user state...');
-    
+
     // Step 1: Clear session
     await clearCurrentUserId();
     await clearCurrentHouseholdId();
-    
+
     // Step 2: Reset onboarding flag
     await resetOnboarding();
-    
+
     // Step 3: Clear all notifications
     await clearAllNotifications();
-    
+
     // Step 4: Clear all feed reminders
     await AsyncStorage.removeItem(STORAGE_KEYS.FEED_REMINDERS);
-    
+
     // Step 5: Clear screen caches
     await AsyncStorage.removeItem(CACHE_KEYS.STATUS_SCREEN);
     await AsyncStorage.removeItem(CACHE_KEYS.SETTINGS_SCREEN);
-    
+
     console.log('✅ Reset complete - app will restart to onboarding');
   } catch (error) {
     console.error('Error in resetToNewUser:', error);
@@ -1355,13 +1370,13 @@ export async function canAddHousehold(userId: string): Promise<boolean> {
   try {
     const user = await getUserById(userId);
     if (!user || !user.IsMainMember) return false;
-    
+
     const households = await getHouseholdsForUser(userId);
     const ownedHouseholds = households.filter((h) => h.MainMemberID === userId);
-    
+
     // Check if any owned household is Pro
     const hasPro = ownedHouseholds.some((h) => h.IsSubscriptionPro);
-    
+
     if (hasPro) return true; // Pro can add unlimited
     return ownedHouseholds.length < 1; // Free can only have 1
   } catch (error) {
@@ -1374,9 +1389,9 @@ export async function canAddMember(householdId: string): Promise<boolean> {
   try {
     const household = await getHouseholdById(householdId);
     if (!household) return false;
-    
+
     const members = await getMembersOfHousehold(householdId);
-    
+
     if (household.IsSubscriptionPro) return true; // Pro can add unlimited
     return members.length < 2; // Free can only have 2 members
   } catch (error) {
@@ -1389,9 +1404,9 @@ export async function canAddPet(householdId: string): Promise<boolean> {
   try {
     const household = await getHouseholdById(householdId);
     if (!household) return false;
-    
+
     const pets = await getPetsByHouseholdId(householdId);
-    
+
     if (household.IsSubscriptionPro) return true; // Pro can add unlimited
     return pets.length < 1; // Free can only have 1 pet
   } catch (error) {
@@ -1406,13 +1421,13 @@ export async function initializeDemoData(): Promise<void> {
     // Create main member
     const mainUser = await createUser('Daniel', 'daniel@example.com', true, 'Active');
     await setCurrentUserId(mainUser.UserID);
-    
+
     // Create household
     const household = await createHousehold('Newman Home', mainUser.UserID, false);
-    
+
     // Link main member to household
     await createUserHousehold(mainUser.UserID, household.HouseholdID);
-    
+
     // Create default pet
     await createPet('Our Pet', household.HouseholdID);
 
@@ -1432,7 +1447,7 @@ export function sendEmail(to: string, subject: string, message: string): boolean
   console.log('📧 Subject:', subject);
   console.log('📧 Message:', message);
   console.log('---');
-  
+
   // In production, this would call an email API (e.g., SendGrid, AWS SES, etc.)
   // For now, we'll just log it to console
   return true;
@@ -1458,7 +1473,7 @@ If you believe this was a mistake, please contact ${removedByName} directly.
 Best regards,
 I Fed the Pet Team
   `.trim();
-  
+
   return sendEmail(memberEmail, subject, message);
 }
 
@@ -1493,7 +1508,7 @@ export async function setCachedScreenData<T>(cacheKey: string, data: T): Promise
  * @param onUpdate A function to run whenever a change is detected
  */
 export function subscribeToHouseholdChanges(
-  householdId: string, 
+  householdId: string,
   onUpdate: () => void
 ) {
   // 1. Setup the listener for the 'pets' table

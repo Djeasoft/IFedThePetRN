@@ -3,6 +3,7 @@
 // Version: 2.0.0 - React Web to React Native
 // Version: 3.0.0 - Multi-Household Switcher Implementation
 // Version: 3.1.0 - Fix: onStatusReady callback, one-time legacy cleanup
+// Version: 3.2.0 - Fix: naming collision between state setter and DB import for currentHouseholdId
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -34,8 +35,8 @@ import {
   getCachedScreenData,
   setCachedScreenData,
   CACHE_KEYS,
-  setCurrentHouseholdId,
-  getCurrentHouseholdId,
+  setCurrentHouseholdId,    // DB function: persists to AsyncStorage
+  getCurrentHouseholdId,    // DB function: reads from AsyncStorage
 } from '../lib/database';
 import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
 import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
@@ -76,7 +77,12 @@ export function StyledStatusScreen({
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
   const [feedAllSelected, setFeedAllSelected] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [currentHouseholdId, setCurrentHouseholdId] = useState<string | null>(null);
+  // FIX v3.2.0: Renamed from currentHouseholdId/setCurrentHouseholdId to avoid collision
+  // with the identically-named functions imported from ../lib/database above.
+  // The collision caused the DB import to be shadowed, meaning the household ID was
+  // never persisted to AsyncStorage and the state value remained null — silently
+  // blocking the feed button guard on every press.
+  const [activeHouseholdId, setActiveHouseholdId] = useState<string | null>(null);
   const [isPro, setIsPro] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [household, setHousehold] = useState<Household | null>(null);
@@ -102,7 +108,7 @@ export function StyledStatusScreen({
     petNames: string[];
     userName: string;
   }> => {
-    // Use the new PetNames field from the event if it exists, 
+    // Use the new PetNames field from the event if it exists,
     // or fall back to looking them up for older records
     const petNames = event.PetNames ? event.PetNames.split(', ') : await Promise.all(
       event.PetIDs.map(async (petId) => {
@@ -129,15 +135,17 @@ export function StyledStatusScreen({
 
       const skipCache = options?.skipCache ?? false;
 
-      // Step 1: Try cache first for instant display (FIXED: removed && loading)
+      // Step 1: Try cache first for instant display
       if (!skipCache) {
         const cached = await getCachedScreenData<StatusScreenCache>(CACHE_KEYS.STATUS_SCREEN);
+        console.log('📦 Cache result:', cached ? 'HIT' : 'MISS', cached?.currentHouseholdId, cached?.currentUser?.MemberName);
+
         if (cached) {
           setPets(cached.pets);
           setHousehold(cached.household);
           setCurrentUser(cached.currentUser);
           setIsPro(cached.isPro);
-          setCurrentHouseholdId(cached.currentHouseholdId);
+          setActiveHouseholdId(cached.currentHouseholdId);  // FIX: was setCurrentHouseholdId
           setLatestEvent(cached.latestEvent);
           setLatestEventDetails(cached.latestEventDetails);
           setHistoryEvents(cached.historyEvents);
@@ -149,40 +157,43 @@ export function StyledStatusScreen({
 
       // Step 2: Always fetch fresh from Supabase
       const userId = await getCurrentUserId();
+      console.log('👤 getCurrentUserId result:', userId);
       if (!userId) return;
 
       const user = await getUserById(userId);
+      console.log('👤 getUserById result:', user?.MemberName, user?.UserID);
       setCurrentUser(user);
 
       // Get ALL households for this user
       const households = await getHouseholdsForUser(userId);
+      console.log('🏠 households:', households.length, households.map(h => h.HouseholdName));
       if (households.length === 0) {
         setLoading(false);
         return;
       }
 
-      // Get current household ID (with fallback)
-      let currentHouseholdId = await getCurrentHouseholdId();
-      if (!currentHouseholdId) {
+      // Get current household ID from AsyncStorage (with fallback)
+      let savedHouseholdId = await getCurrentHouseholdId();  // DB function — unambiguous now
+      if (!savedHouseholdId) {
         // No saved household, use first one
-        currentHouseholdId = households[0].HouseholdID;
-        await setCurrentHouseholdId(currentHouseholdId);
+        savedHouseholdId = households[0].HouseholdID;
+        await setCurrentHouseholdId(savedHouseholdId);       // DB function — unambiguous now
       }
 
       // Find the current household in the list
-      const currentHousehold = households.find(h => h.HouseholdID === currentHouseholdId);
+      const currentHousehold = households.find(h => h.HouseholdID === savedHouseholdId);
       if (!currentHousehold) {
         // Saved household is invalid (deleted?), fallback to first
         const fallback = households[0];
-        await setCurrentHouseholdId(fallback.HouseholdID);
-        setCurrentHouseholdId(fallback.HouseholdID);
+        await setCurrentHouseholdId(fallback.HouseholdID);   // DB function — persists to AsyncStorage
+        setActiveHouseholdId(fallback.HouseholdID);          // State — updates UI
         // Recursively load with corrected household
         await loadData(options);
         return;
       }
 
       setHousehold(currentHousehold);
-      setCurrentHouseholdId(currentHousehold.HouseholdID);
+      setActiveHouseholdId(currentHousehold.HouseholdID);    // FIX: was setCurrentHouseholdId
       setIsPro(currentHousehold.IsSubscriptionPro);
 
       // Notify App.tsx that IDs are ready (for NotificationsPanel)
@@ -273,9 +284,9 @@ export function StyledStatusScreen({
 
   // Real-time listener for OTHER devices' changes
   useEffect(() => {
-    if (!currentHouseholdId) return;
+    if (!activeHouseholdId) return;  // FIX: was currentHouseholdId
 
-    const unsubscribe = subscribeToHouseholdChanges(currentHouseholdId, () => {
+    const unsubscribe = subscribeToHouseholdChanges(activeHouseholdId, () => {  // FIX: was currentHouseholdId
       if (suppressNextRealtimeLoad.current) {
         // This was triggered by OUR OWN action — skip the reload
         suppressNextRealtimeLoad.current = false;
@@ -285,7 +296,7 @@ export function StyledStatusScreen({
     });
 
     return () => unsubscribe();
-  }, [currentHouseholdId]);
+  }, [activeHouseholdId]);  // FIX: was currentHouseholdId
 
   // Handle pet selection
   const handlePetToggle = (petId: string) => {
@@ -310,7 +321,9 @@ export function StyledStatusScreen({
 
   // Feed logic — Optimistic Update Pattern
   const handleFeedClick = async () => {
-    if (!currentUser || !currentHouseholdId) return;
+    console.log('🔴 Feed button pressed', { currentUser: currentUser?.MemberName, activeHouseholdId });
+
+    if (!currentUser || !activeHouseholdId) return;  // FIX: was currentHouseholdId
     if (isOperationInFlight) return; // Prevent double-tap
 
     const petsToFeed = feedAllSelected
@@ -335,7 +348,7 @@ export function StyledStatusScreen({
 
     const optimisticEvent: FeedingEvent = {
       EventID: tempEventId,
-      HouseholdID: currentHouseholdId,
+      HouseholdID: activeHouseholdId,              // FIX: was currentHouseholdId
       FedByUserID: currentUser.UserID,
       FedByMemberName: currentUser.MemberName,
       PetIDs: petsToFeed.map((p) => p.PetID),
@@ -382,7 +395,7 @@ export function StyledStatusScreen({
 
       // Create the feeding event (with proper UndoDeadline)
       const createdEvent = await addFeedingEvent({
-        HouseholdID: currentHouseholdId,
+        HouseholdID: activeHouseholdId,             // FIX: was currentHouseholdId
         FedByUserID: currentUser.UserID,
         FedByMemberName: currentUser.MemberName,
         PetIDs: petsToFeed.map((p) => p.PetID),
