@@ -55,6 +55,21 @@ You were correct to push back on my initial instructions. A comprehensive audit 
 **Fix:** Added to imports  
 **Status:** Fixed in `SettingsScreen_FIXED.tsx`
 
+### Bug #6: RLS Silent Failures: ❌ 
+If you haven't implemented the .select().single() pattern on updates, the UI will claim success while the database silently rejects the write.
+
+### Bug #6: RLS Silent Failures: ❌ 
+If you haven't implemented the .select().single() pattern on updates, the UI will claim success while the database silently rejects the write.
+
+### Bug #7: Null-Value Mapping: ❌ 
+Using truthy checks instead of !== undefined will prevent you from ever "clearing" a field (like undoing a feed), which is a functional bug.
+
+### Bug #8 Touch Interception: ❌ 
+On Android, the Pro Toggle or Switch components will feel "broken" or "frozen" if they are still wrapped in TouchableOpacity.
+
+### Bug #9 Notification Badge Stale Counts: ❌  
+The "phantom 21" badge is caused by legacy AsyncStorage data clashing with Supabase; this is a bug that ruins the "clean" feel of the app.
+
 ---
 
 ## DELIVERABLES CREATED
