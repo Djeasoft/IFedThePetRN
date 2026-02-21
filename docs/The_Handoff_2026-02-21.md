@@ -1,6 +1,6 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Saturday, 21 February 2026, 15:00 GMT
-**Updated By:** Jarques
+**Last Updated:** Saturday, 21 February 2026, 18:30 GMT
+**Updated By:** Jarques + Claude (session sign-off)
 **Next Session:** Pick up from WHAT'S NEXT — Item 1
 
 ---
@@ -23,17 +23,23 @@ What is verified and working:
 - Email authentication (signup, login, session persistence)
 - Three-gate routing: AuthScreen → OnboardingFlow → StatusScreen
 - Onboarding flow (Create Household and Join Household paths)
-- Multi-household switching via modal in SettingsScreen
-- Household-scoped notifications stored in Supabase
-- Read/unread notification state persisted per user per household
-- 30-day notification auto-cleanup
 - Cache-first loading with real-time subscriptions on StatusScreen and SettingsScreen
 - Optimistic UI on feed button (0ms response, background Supabase sync)
+- Feed button → Supabase write → feeding history display ✅ *(fixed this session)*
+- Real-time sync: Device A feeds pet → Device B StatusScreen auto-updates ✅ *(fixed this session)*
+- Cross-device notifications ✅ *(confirmed this session)*
 - 2-minute undo window
 - Pro tier toggle (pessimistic UI — awaits DB confirmation)
 - Multi-device sync suppression (suppressNextRealtimeLoad ref pattern)
+- Household-scoped notifications stored in Supabase
+- Read/unread notification state persisted per user per household
+- 30-day notification auto-cleanup
 
-**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go
+What is **not** working:
+- Multi-household switching via modal in SettingsScreen ❌
+- Notification bell badge count does not reset after marking all read ❌
+
+**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Feed button and real-time sync re-verified by Jarques on 21 February 2026.
 
 ---
 
@@ -43,11 +49,13 @@ What is verified and working:
 
 | # | Bug | Severity | Notes |
 |---|-----|----------|-------|
-| 1 | Real-time sync not firing — Henry feeds pet, Daniel's StatusScreen does not update automatically | 🔴 Critical | This is the core feature. Manual refresh works. Auto-refresh broken. |
-| 2 | Notification bell badge count does not auto-refresh | 🔴 Critical | Badge is stale until user manually opens notifications panel |
-| 3 | "Ask member to feed" notification not received by the other user | 🟠 High | Feature is stubbed — UI fires local Alert only, no server-side trigger |
-| 4 | New household member inherits stale notification count from previous sessions | 🟡 Minor | Henry joined and saw 12 unread from Daniel's prior activity |
-| 5 | Email invitations not sending | 🟡 Minor | Workaround confirmed: household code join works perfectly |
+| 1 | ~~Real-time sync not firing — Henry feeds pet, Daniel's StatusScreen does not update automatically~~ | ✅ Fixed | Root cause: `getCurrentUserId()` returned null after cache clear — no fallback to Supabase session. Fix: self-healing fallback added to `database.ts`. |
+| 2 | ~~Feed button did nothing on press — no logs fired~~ | ✅ Fixed | Root cause: naming collision in `StatusScreen.tsx` — state `setCurrentHouseholdId` shadowed the DB import. Fix: renamed state to `activeHouseholdId` in `StatusScreen.tsx` v3.2.0. |
+| 3 | Multi-household switching — switching households does not update StatusScreen | 🔴 Critical | Switcher modal exists in Settings but selection does not propagate to StatusScreen |
+| 4 | Notification bell badge count does not reset after marking all read | 🔴 Critical | Badge remains stale until app reload |
+| 5 | "Ask member to feed" notification not received by the other user | 🟠 High | Feature is stubbed — UI fires local Alert only, no server-side trigger |
+| 6 | New household member inherits stale notification count from previous sessions | 🟡 Minor | Henry joined and saw 12 unread from Daniel's prior activity |
+| 7 | Email invitations not sending | 🟡 Minor | Workaround confirmed: household code join works perfectly |
 
 ---
 
@@ -55,15 +63,19 @@ What is verified and working:
 
 *Work through in order. Do not skip ahead.*
 
-- [ ] **1. Fix real-time StatusScreen sync** — When any household member feeds a pet, all other members' StatusScreenes must update automatically without manual refresh. Investigate the Supabase WebSocket subscription on StatusScreen. Likely cause: subscription is scoped incorrectly or the suppressNextRealtimeLoad ref is muting external updates, not just own-device updates.
+- [x] **1. Fix real-time StatusScreen sync** — Resolved. `getCurrentUserId()` now self-heals from Supabase session when AsyncStorage is empty.
 
-- [ ] **2. Fix notification bell badge auto-refresh** — Badge count should update in real time when new notifications arrive. Tie this to the same real-time subscription fix in Item 1.
+- [x] **2. Fix feed button** — Resolved. Naming collision in `StatusScreen.tsx` between state setter and DB import. Renamed state to `activeHouseholdId`.
 
-- [ ] **3. Wire up "Ask member to feed" notification** — Replace the local `Alert.alert('Request Sent')` stub with an actual insert into the Supabase notifications table, triggering a real notification to the target household member.
+- [ ] **3. Fix multi-household switching** — Switching households via the Settings modal does not update StatusScreen. Investigate how the selected household ID is saved and whether StatusScreen re-loads on change.
 
-- [ ] **4. Fix stale notification inheritance for new members** — When a user joins a household via code, only show notifications from their join date onward, or mark all prior notifications as read on join.
+- [ ] **4. Fix notification bell badge auto-refresh** — Badge count should return to zero after user marks all notifications as read. Trace the mark-as-read flow and confirm `unreadCount` state in StatusScreen is updated in response.
 
-- [ ] **5. Plan Phase B** — Once Items 1–3 are resolved and re-tested with Dan, open Phase B planning: Apple/Google OAuth, React Navigation, component extraction, and MVP prep.
+- [ ] **5. Wire up "Ask member to feed" notification** — Replace the local `Alert.alert('Request Sent')` stub with an actual insert into the Supabase notifications table, triggering a real notification to the target household member.
+
+- [ ] **6. Fix stale notification inheritance for new members** — When a user joins a household via code, only show notifications from their join date onward, or mark all prior notifications as read on join.
+
+- [ ] **7. Plan Phase B** — Once Items 3–5 are resolved and re-tested with Dan, open Phase B planning: Apple/Google OAuth, React Navigation, component extraction, and MVP prep.
 
 ---
 
@@ -95,8 +107,11 @@ Paste this section at the start of a new AI session to align quickly.
 - Two-phase user creation → minimal record on signup, full profile during onboarding
 - Pessimistic UI on Pro toggle → awaits DB confirmation before UI change
 - Household-scoped subscriptions → all real-time listeners filter by householdId
+- getCurrentUserId() is self-healing → falls back to Supabase session if AsyncStorage is empty
 
-**Current status:** Phase A complete. App tested by Dan and Jamie on 20 Feb 2026. Real-time sync between devices is broken. That is the active work.
+**Key fix to know:** `StatusScreen.tsx` uses `activeHouseholdId` (state) not `currentHouseholdId` — renamed in v3.2.0 to resolve a naming collision with the DB import of the same name.
+
+**Current status:** Phase A complete. Feed button and real-time sync fixed 21 Feb 2026. Two active bugs: multi-household switching (Bug 3) and notification bell badge not resetting (Bug 4). That is the active work.
 
 **Docs folder:** `/IFedThePetRN/docs/` on GitHub
 - `The Compass` — architectural decision log and technical debt register

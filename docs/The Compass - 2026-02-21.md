@@ -114,23 +114,35 @@
 * **Architecture Shift**: Validated the "Three-gate system" in `AppRouter` (`Auth` -> `Onboarding` -> `Main App`) to handle brand new users, returning users, and interrupted onboarding edge cases safely without duplicate database records.
 * **Action**: Mapped the interrupt-safe flag pattern ensuring `setOnboardingCompleted()` is only written to `AsyncStorage` after successful Supabase DB writes.
 
-**21 February 2026, 1:53pm**
+**19 February 2026, 8:53am**
 * **Milestone**: Auth Flow Hardening & Invalid Refresh Token Fix.
 * **Problem**: An unhandled `AuthApiError: Invalid Refresh Token` caused a jarring UI flash when restoring a stale session.
 * **Action**: Updated `AuthContext.tsx` to actively validate the session on startup via `getUser()` (which pings the server) instead of blindly trusting the local cache from `getSession()`.
 * **Action**: Verified and permanently deleted the orphaned `OnboardingWelcomeScreen.tsx` dead code file.
 
-**21 February 2026, 1:53pm**
+**19 February 2026, 1:53pm**
 * **Milestone**: Onboarding Flag Migration & Source of Truth Alignment.
 * **Problem**: The `onboardingCompleted` flag was stored purely locally in `AsyncStorage` and was accidentally being wiped upon user sign-out, forcing returning users back through onboarding.
 * **Architecture Shift**: Migrated the `is_onboarding_completed` flag directly into the Supabase `users` table via SQL, establishing the cloud as the source of truth to support multi-device syncing. 
 * **Action**: Fixed an associated timing bug in `App.tsx` where the app briefly flashed the onboarding screen before evaluating the new cloud flag by setting `checkingOnboarding(true)` synchronously.
 
-**21 February 2026, 1:53pm**
+**19 February 2026, 3:53pm**
 * **Milestone**: Notifications Database Migration & Cross-Household Scoping.
 * **Problem**: The notification badge on `StatusScreen` persistently showed stale counts (e.g., "21") and `NotificationsPanel` hung on "Loading..." because notifications were still operating entirely on legacy local `AsyncStorage` data instead of Supabase.
 * **Architecture Shift**: Migrated the entire notification system to Supabase. Created a `notifications` table (scoped to `household_id`) and a `notification_reads` junction table (tracking read state per user). 
 * **Action**: Rewrote 7 core notification functions in `database.ts`. Simplified the data retrieval by replacing fragile PostgREST left-joins with two independent simple queries merged client-side. Implemented a `clearLegacyNotificationData()` function to explicitly wipe the stale `AsyncStorage` remnants causing the phantom "21" badge.
+
+**21 February 2026, 19:00pm**
+* **Milestone**: Feed Button Restoration & Auth Session Self-Healing.
+* **Problem 1**: The core "I FED THE PET" button was completely unresponsive on device — no logs fired on press, no UI change, no Supabase write. Root cause was a JavaScript naming collision in `StatusScreen.tsx` where the React state declaration `const [currentHouseholdId, setCurrentHouseholdId]` silently shadowed the identically-named `setCurrentHouseholdId` function imported from `../lib/database`. The state variable was therefore never correctly populated, causing the feed handler guard `if (!currentUser || !currentHouseholdId) return` to exit silently on every press.
+* **Action**: Renamed the state variable and setter to `activeHouseholdId` / `setActiveHouseholdId` throughout `StatusScreen.tsx`. All references to the database import retained their original names. Versioned as `StatusScreen.tsx v3.2.0`.
+* **Architectural Rule**: State variable names must never collide with imported function names in the same file. TypeScript does not warn on this — the inner scope silently wins.
+
+* **Problem 2**: After running `npx expo start --clear`, `getCurrentUserId()` returned `null` even though a valid Supabase auth session was active. The function read exclusively from AsyncStorage (`currentUserId` key), which is wiped on cache clear and on fresh installs. `loadData()` bailed silently on `userId = null`, leaving `currentUser` and `activeHouseholdId` state as null/undefined — compounding Problem 1.
+* **Architecture Shift**: Updated `getCurrentUserId()` in `database.ts` to implement a self-healing fallback. If AsyncStorage returns null, the function now calls `supabase.auth.getSession()`, resolves the internal user record via `getUserByAuthId()`, re-hydrates the AsyncStorage key for subsequent calls, and returns the valid user ID. The function is now resilient to cache clears, fresh installs, and AsyncStorage corruption.
+* **Architectural Rule**: AsyncStorage must never be the sole source of truth for identity. Supabase auth session is always the authoritative fallback for determining who the current user is.
+
+* **Outcome**: Feed button fully operational. Real-time sync between devices confirmed working (Device A feeds → Device B StatusScreen auto-updates). Cross-device notifications confirmed. Phase A validated end-to-end on real devices.
 
 ---
 
