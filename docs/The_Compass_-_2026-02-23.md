@@ -144,6 +144,14 @@
 
 * **Outcome**: Feed button fully operational. Real-time sync between devices confirmed working (Device A feeds → Device B StatusScreen auto-updates). Cross-device notifications confirmed. Phase A validated end-to-end on real devices.
 
+**23 February 2026, 19:00pm**
+* **Milestone**: Notification Bell Badge Fix — Lifted State Pattern.
+* **Problem**: After tapping "Mark all as read" in `NotificationsPanel`, the bell badge on `StatusScreen` retained its stale count until the app was fully reloaded. Root cause: `unreadCount` was local state inside `StatusScreen.tsx`, and `NotificationsPanel.tsx` (rendered as a sibling in `App.tsx`) had no mechanism to update it. The two components shared no common state for the badge count.
+* **Action**: Lifted `unreadCount` state from `StatusScreen.tsx` to `App.tsx`, establishing `App.tsx` as the single owner. `StatusScreen` now receives `unreadCount` as a prop (reads) and calls `onUnreadCountChange` when loading fresh data. `NotificationsPanel` calls the same `onUnreadCountChange` callback after marking single or all notifications as read, immediately zeroing the badge.
+* **Files changed**: `App.tsx` v3.6.0, `StatusScreen.tsx` v3.3.0, `NotificationsPanel.tsx` v2.2.0.
+* **Architectural Rule**: When two sibling components need to share and mutate the same piece of state, lift it to their nearest common parent rather than attempting cross-component communication via refs, events, or redundant network fetches.
+* **Outcome**: Bell badge resets to zero instantly on mark-all-read. Changes pushed to GitHub and Expo preview. Dan notified.
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions
