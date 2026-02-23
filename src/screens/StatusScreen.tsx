@@ -4,6 +4,7 @@
 // Version: 3.0.0 - Multi-Household Switcher Implementation
 // Version: 3.1.0 - Fix: onStatusReady callback, one-time legacy cleanup
 // Version: 3.2.0 - Fix: naming collision between state setter and DB import for currentHouseholdId
+// Version: 3.3.0 - Fix: unreadCount lifted to App.tsx — now received and updated via props
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -46,6 +47,9 @@ interface StyledStatusScreenProps {
   onOpenSettings: () => void;
   onOpenNotifications: () => void;
   onStatusReady?: (userId: string, householdId: string) => void;
+  // FIX v3.3.0: Lifted to App.tsx — badge count is now shared with NotificationsPanel
+  unreadCount: number;
+  onUnreadCountChange: (count: number) => void;
 }
 
 interface HistoryEventDetails {
@@ -70,13 +74,16 @@ export function StyledStatusScreen({
   onOpenSettings,
   onOpenNotifications,
   onStatusReady,
+  unreadCount,
+  onUnreadCountChange,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
 
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
   const [feedAllSelected, setFeedAllSelected] = useState(true);
-  const [unreadCount, setUnreadCount] = useState(0);
+  // REMOVED: const [unreadCount, setUnreadCount] = useState(0);
+  // FIX v3.3.0: unreadCount is now a prop from App.tsx
   // FIX v3.2.0: Renamed from currentHouseholdId/setCurrentHouseholdId to avoid collision
   // with the identically-named functions imported from ../lib/database above.
   // The collision caused the DB import to be shadowed, meaning the household ID was
@@ -149,7 +156,7 @@ export function StyledStatusScreen({
           setLatestEvent(cached.latestEvent);
           setLatestEventDetails(cached.latestEventDetails);
           setHistoryEvents(cached.historyEvents);
-          setUnreadCount(cached.unreadCount);
+          onUnreadCountChange(cached.unreadCount);  // FIX v3.3.0: was setUnreadCount
           setLoading(false);
           // Continue with background fetch below (don't return)
         }
@@ -207,7 +214,7 @@ export function StyledStatusScreen({
       ]);
 
       setPets(householdPets);
-      setUnreadCount(count);
+      onUnreadCountChange(count);  // FIX v3.3.0: was setUnreadCount
 
       // Update the Latest Event and History list
       let resolvedLatestDetails: { petNames: string[]; userName: string } | null = null;

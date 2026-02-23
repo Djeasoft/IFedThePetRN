@@ -10,6 +10,7 @@
 // Version: 3.3.0 - Allow new users to proceed to OnboardingFlow (they will be created during onboarding)
 // Version: 3.4.0 - Detect orphaned users (completed onboarding but database missing) and log them out
 // Version: 3.5.0 - Fix notifications: get IDs from StatusScreen ready callback, not one-time useEffect
+// Version: 3.6.0 - Fix: Lift unreadCount to App level so NotificationsPanel mark-as-read updates the bell badge
 
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
@@ -43,6 +44,8 @@ function AppRouter() {
   // FIX: These are now set by StatusScreen when data is ready, not a one-time useEffect
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentHouseholdId, setCurrentHouseholdId] = useState<string | null>(null);
+  // FIX v3.6.0: Lifted from StatusScreen so NotificationsPanel can update it directly
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Check onboarding status when authenticated + verified
   useEffect(() => {
@@ -152,6 +155,8 @@ function AppRouter() {
         onOpenSettings={handleOpenSettings}
         onOpenNotifications={handleOpenNotifications}
         onStatusReady={handleStatusReady}
+        unreadCount={unreadCount}
+        onUnreadCountChange={setUnreadCount}
       />
       <SettingsScreen
         visible={showSettings}
@@ -162,6 +167,7 @@ function AppRouter() {
         visible={showNotifications}
         onClose={handleCloseNotifications}
         userId={currentUserId ?? undefined}
+        onUnreadCountChange={setUnreadCount}
       />
     </>
   );

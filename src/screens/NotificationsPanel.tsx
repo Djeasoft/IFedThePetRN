@@ -2,6 +2,7 @@
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - Supabase integration with per-user read tracking
 // Version: 2.1.0 - Cross-household: shows notifications from ALL user's households
+// Version: 2.2.0 - Fix: onUnreadCountChange callback syncs badge count with App.tsx
 // Shows all notifications with mark as read functionality
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -29,9 +30,11 @@ interface NotificationsPanelProps {
   visible: boolean;
   onClose: () => void;
   userId?: string;
+  // FIX v2.2.0: Callback to sync unread count with App.tsx bell badge
+  onUnreadCountChange?: (count: number) => void;
 }
 
-export function NotificationsPanel({ visible, onClose, userId }: NotificationsPanelProps) {
+export function NotificationsPanel({ visible, onClose, userId, onUnreadCountChange }: NotificationsPanelProps) {
   const { theme } = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +52,9 @@ export function NotificationsPanel({ visible, onClose, userId }: NotificationsPa
       const allNotifications = await getAllNotificationsForUser(userId);
       console.log('🔔 NotificationsPanel: Loaded', allNotifications.length, 'notifications');
       setNotifications(allNotifications);
+      // FIX v2.2.0: Sync initial unread count with bell badge on load
+      const initialUnread = allNotifications.filter((n) => !n.read).length;
+      onUnreadCountChange?.(initialUnread);
     } catch (error) {
       console.error('Error loading notifications:', error);
     } finally {
@@ -67,9 +73,13 @@ export function NotificationsPanel({ visible, onClose, userId }: NotificationsPa
     if (!userId) return;
     try {
       await markNotificationAsRead(notificationId, userId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
-      );
+      setNotifications((prev) => {
+        const updated = prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n));
+        // FIX v2.2.0: Sync updated unread count with bell badge
+        const newUnread = updated.filter((n) => !n.read).length;
+        onUnreadCountChange?.(newUnread);
+        return updated;
+      });
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -81,6 +91,8 @@ export function NotificationsPanel({ visible, onClose, userId }: NotificationsPa
     try {
       await markAllNotificationsAsReadForUser(userId);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      // FIX v2.2.0: Sync zero unread count with bell badge
+      onUnreadCountChange?.(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
     }
