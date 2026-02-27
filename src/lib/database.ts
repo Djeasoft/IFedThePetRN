@@ -1596,3 +1596,35 @@ export function subscribeToSettingsChanges(
     supabase.removeChannel(petSub);
   };
 }
+
+/**
+ * Listens for new notifications in a specific household.
+ * Used to update the bell badge count in real-time on StatusScreen.
+ * @param householdId The household to watch
+ * @param onNewNotification A function to run when a new notification arrives
+ */
+export function subscribeToNotificationChanges(
+  householdId: string,
+  onNewNotification: () => void
+) {
+  const notificationSub = supabase
+    .channel(`notifications:${householdId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `household_id=eq.${householdId}`,
+      },
+      () => {
+        console.log('🔔 Realtime: New notification received!');
+        onNewNotification();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(notificationSub);
+  };
+}

@@ -6,6 +6,11 @@
 // Version: 3.2.0 - Fix: naming collision between state setter and DB import for currentHouseholdId
 // Version: 3.3.0 - Fix: unreadCount lifted to App.tsx — now received and updated via props
 // Version: 3.4.0 - Fix: householdId prop from App.tsx drives reload on household switch
+// Version: 3.5.0 - Real-time notification subscription + bell sound on new notifications from other devices
+// Version: 3.6.0 - Add suppressNotificationSoundRef prop from App.tsx for cross-screen bell suppression
+// Version: 3.7.0 - Fix: merge household + notification subscriptions into one useEffect (same [activeHouseholdId] dep)
+//                  so the notification subscription is never torn down by loadData() re-renders, ensuring
+//                  feed_request and other standalone notifications also update the bell badge in real-time
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -34,6 +39,7 @@ import {
   undoFeedingEvent,
   getPetById,
   subscribeToHouseholdChanges,
+  subscribeToNotificationChanges,
   getCachedScreenData,
   setCachedScreenData,
   CACHE_KEYS,
@@ -43,6 +49,7 @@ import {
 import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
 import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
 import { useTheme } from '../contexts/ThemeContext';
+import { Audio } from 'expo-av';
 
 interface StyledStatusScreenProps {
   onOpenSettings: () => void;
@@ -53,6 +60,9 @@ interface StyledStatusScreenProps {
   onUnreadCountChange: (count: number) => void;
   // FIX v3.4.0: App.tsx passes the active household ID as prop so switches propagate here
   householdId?: string;
+  // FIX v3.6.0: Shared ref from App.tsx — when SettingsScreen creates a notification,
+  // this ref is set to true so we skip the bell sound for that event
+  suppressNotificationSoundRef?: React.MutableRefObject<boolean>;
 }
 
 interface HistoryEventDetails {
@@ -80,6 +90,7 @@ export function StyledStatusScreen({
   unreadCount,
   onUnreadCountChange,
   householdId,
+  suppressNotificationSoundRef,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
 
@@ -112,6 +123,29 @@ export function StyledStatusScreen({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isOperationInFlight, setIsOperationInFlight] = useState(false);
   const suppressNextRealtimeLoad = useRef(false);
+  
+  // Ref to suppress bell sound for own-device notification actions
+  const suppressNextNotificationSound = useRef(false);
+
+  // Play notification bell sound
+  const playNotificationBell = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(
+        require('../../assets/notification_bell.wav'),
+        { shouldPlay: true, volume: 0.6 }
+      );
+      // Unload after playback to free memory
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      // Non-critical — don't let sound errors break the app
+      console.warn('Could not play notification sound:', error);
+    }
+  };
+  
   const legacyCleanupDone = useRef(false);
 
   // Helper function to resolve event details
@@ -293,21 +327,54 @@ export function StyledStatusScreen({
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time listener for OTHER devices' changes
+  // Real-time listeners: household data changes + new notifications.
+  // FIX v3.7.0: Both subscriptions share ONE useEffect with [activeHouseholdId] only.
+  // Previously, the notification subscription lived in its own useEffect that also
+  // depended on currentUser?.UserID. Every time loadData() refreshed currentUser
+  // (triggered by any pet/feeding_event change), the notification subscription was
+  // torn down and briefly recreated — creating a window where standalone notifications
+  // (e.g. feed_request) could arrive and be missed, leaving the bell badge stale.
+  // Merging them here ensures the notification subscription is never disrupted by
+  // incidental state updates from loadData().
   useEffect(() => {
-    if (!activeHouseholdId) return;  // FIX: was currentHouseholdId
+    if (!activeHouseholdId) return;
 
-    const unsubscribe = subscribeToHouseholdChanges(activeHouseholdId, () => {  // FIX: was currentHouseholdId
+    // Subscription 1: pets + feeding_events changes → full data reload
+    const unsubscribeHousehold = subscribeToHouseholdChanges(activeHouseholdId, () => {
       if (suppressNextRealtimeLoad.current) {
-        // This was triggered by OUR OWN action — skip the reload
         suppressNextRealtimeLoad.current = false;
         return;
       }
-      loadData(); // Another device changed something — reload
+      loadData();
     });
 
-    return () => unsubscribe();
-  }, [activeHouseholdId]);  // FIX: was currentHouseholdId
+    // Subscription 2: notification inserts → bell badge + sound only (no full reload)
+    // Uses getCurrentUserId() inside the callback (reads AsyncStorage fresh each time)
+    // so no closure dependency on currentUser state.
+    const unsubscribeNotifications = subscribeToNotificationChanges(activeHouseholdId, async () => {
+      if (suppressNextNotificationSound.current || suppressNotificationSoundRef?.current) {
+        suppressNextNotificationSound.current = false;
+        if (suppressNotificationSoundRef) suppressNotificationSoundRef.current = false;
+      } else {
+        playNotificationBell();
+      }
+
+      try {
+        const userId = await getCurrentUserId();
+        if (userId && activeHouseholdId) {
+          const count = await getUnreadNotificationsCount(activeHouseholdId, userId);
+          onUnreadCountChange(count);
+        }
+      } catch (error) {
+        console.error('Error refreshing notification count:', error);
+      }
+    });
+
+    return () => {
+      unsubscribeHousehold();
+      unsubscribeNotifications();
+    };
+  }, [activeHouseholdId]);
 
   // FIX v3.4.0: React to household switches driven by App.tsx.
   // When App.tsx changes the householdId prop (after SettingsScreen reports a switch),
@@ -415,6 +482,7 @@ export function StyledStatusScreen({
     setHistoryEvents([optimisticHistoryEntry, ...previousHistoryEvents].slice(0, 30));
     setUndoInfo({ canUndo: true, eventId: tempEventId });
     suppressNextRealtimeLoad.current = true;
+    suppressNextNotificationSound.current = true;
 
     // --- SYNC: Push to Supabase in background ---
     try {

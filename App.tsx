@@ -12,8 +12,9 @@
 // Version: 3.5.0 - Fix notifications: get IDs from StatusScreen ready callback, not one-time useEffect
 // Version: 3.6.0 - Fix: Lift unreadCount to App level so NotificationsPanel mark-as-read updates the bell badge
 // Version: 3.7.0 - Fix: App.tsx is now source of truth for currentHouseholdId; passes it as prop to all screens so household switches propagate correctly
+// Version: 3.8.0 - Add suppressNotificationSoundRef shared between SettingsScreen and StatusScreen for bell sound suppression
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
@@ -47,6 +48,10 @@ function AppRouter() {
   const [currentHouseholdId, setCurrentHouseholdId] = useState<string | null>(null);
   // FIX v3.6.0: Lifted from StatusScreen so NotificationsPanel can update it directly
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // FIX v3.8.0: Shared ref — when SettingsScreen (or any sibling) creates a notification,
+  // it sets this to true so StatusScreen skips the bell sound for that one event.
+  const suppressNotificationSoundRef = useRef(false);
 
   // Check onboarding status when authenticated + verified
   useEffect(() => {
@@ -165,12 +170,14 @@ function AppRouter() {
         unreadCount={unreadCount}
         onUnreadCountChange={setUnreadCount}
         householdId={currentHouseholdId ?? undefined}
+        suppressNotificationSoundRef={suppressNotificationSoundRef}
       />
       <SettingsScreen
         visible={showSettings}
         onClose={handleCloseSettings}
         onResetOnboarding={handleResetFromSettings}
         onHouseholdSwitch={handleHouseholdSwitch}
+        suppressNotificationSoundRef={suppressNotificationSoundRef}
       />
       <NotificationsPanel
         visible={showNotifications}

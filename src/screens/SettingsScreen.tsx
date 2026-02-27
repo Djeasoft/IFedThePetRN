@@ -4,6 +4,8 @@
 // Version: 3.0.0 - Multi-Household Switcher Implementation
 // Version: 3.1.0 - Fix: household switch propagates to StatusScreen via onHouseholdSwitch callback; loadData respects saved household
 // Version: 3.2.0 - Account section shows current user name + email above Sign Out
+// Version: 3.3.0 - Wire up "Ask member to feed" — real Supabase notification insert replaces Alert.alert stub
+// Version: 3.4.0 - Add suppressNotificationSoundRef prop to suppress bell sound on sender's device
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -71,9 +73,10 @@ interface SettingsScreenProps {
   onClose: () => void;
   onResetOnboarding?: () => void;
   onHouseholdSwitch?: (householdId: string) => void;
+  suppressNotificationSoundRef?: React.MutableRefObject<boolean>;
 }
 
-export function SettingsScreen({ visible, onClose, onResetOnboarding, onHouseholdSwitch }: SettingsScreenProps) {
+export function SettingsScreen({ visible, onClose, onResetOnboarding, onHouseholdSwitch, suppressNotificationSoundRef }: SettingsScreenProps) {
   const { isDark, theme, toggleTheme } = useTheme();
 
   // State
@@ -924,11 +927,30 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                                 { backgroundColor: isPro ? theme.primary : theme.border },
                               ]}
                               disabled={!isPro}
-                              onPress={() => {
-                                Alert.alert(
-                                  'Request Sent',
-                                  `Asked ${member.MemberName} to feed the pet(s)!`
-                                );
+                              onPress={async () => {
+                                try {
+                                  // Suppress bell on sender's device
+                                  if (suppressNotificationSoundRef) {
+                                    suppressNotificationSoundRef.current = true;
+                                  }
+                                  await addNotification({
+                                    householdId: household!.HouseholdID,
+                                    type: 'feed_request',
+                                    message: `${currentUser!.MemberName} asked ${member.MemberName} to feed the pet(s)`,
+                                    memberName: member.MemberName,
+                                    requestedBy: currentUser!.MemberName,
+                                  });
+                                  Alert.alert(
+                                    'Request Sent',
+                                    `Asked ${member.MemberName} to feed the pet(s)!`
+                                  );
+                                } catch (error) {
+                                  console.error('Error sending feed request:', error);
+                                  if (suppressNotificationSoundRef) {
+                                    suppressNotificationSoundRef.current = false;
+                                  }
+                                  Alert.alert('Error', 'Failed to send feed request. Please try again.');
+                                }
                               }}
                               activeOpacity={0.8}
                             >

@@ -170,6 +170,30 @@
 * **Files changed**: `SettingsScreen.tsx` v3.2.0.
 * **Design Decision**: No star, badge, or icon — just name and email as plain text rows. The identity itself is the indicator. Clean, consistent with the existing card style.
 
+**27 February 2026**
+* **Milestone**: Item 5 — "Ask Member to Feed" Notification Wired Up.
+* **Problem**: The "Ask member to feed" button in `SettingsScreen.tsx` fired only a local `Alert.alert('Request Sent')` stub. No data was written to Supabase, and no other household members were notified.
+* **Action**: Replaced the stub `onPress` handler with an async function calling `addNotification()` with parameters: `householdId`, `type: 'feed_request'`, `message: "[RequesterName] asked [TargetName] to feed the pet(s)"`, `memberName`, `requestedBy`. No schema changes were required — the `notifications` table, `addNotification()` function, and `NotificationsPanel` rendering for `feed_request` type were already in place from the notification migration.
+* **Files changed**: `SettingsScreen.tsx` v3.2.0 → v3.3.0.
+* **Outcome**: Tapping "Ask [Member] to feed" now inserts a real notification into Supabase. All household members see it in their `NotificationsPanel`.
+
+**27 February 2026**
+* **Milestone**: Real-Time Notification Subscription & Bell Sound.
+* **Problem**: The notification bell badge on `StatusScreen` only updated when the user manually opened `NotificationsPanel` or when `loadData()` ran (triggered by pet/feeding changes). Standalone notifications like `feed_request` had no real-time listener — only `pets` and `feeding_events` tables had subscriptions.
+* **Action**: Added `subscribeToNotificationChanges()` in `database.ts` — a Supabase real-time WebSocket subscription on the `notifications` table filtered by `household_id`, listening for `INSERT` events only. Added a bell chime sound using `expo-av` (`assets/notification_bell.wav`). When the real-time listener fires from another device's action, `StatusScreen` plays the bell and refreshes the unread count.
+* **Architecture Pattern — Merged Subscription useEffect**: Initially, the notification subscription lived in its own `useEffect` with `[activeHouseholdId, currentUser?.UserID]` as dependencies. This caused a critical bug: every time `loadData()` refreshed `currentUser` state (triggered by any pet/feeding change), the notification subscription was torn down and briefly recreated — creating a window where standalone notifications (e.g. `feed_request`) could arrive and be missed. Fixed by merging both subscriptions (household changes + notification inserts) into a single `useEffect` keyed only on `[activeHouseholdId]`. The notification callback uses `getCurrentUserId()` (reads AsyncStorage fresh each invocation) instead of closing over `currentUser` state, eliminating the dependency.
+* **Architecture Pattern — Cross-Screen Bell Suppression**: The `suppressNotificationSoundRef` is a `useRef` owned by `App.tsx` and passed as a prop to both `StatusScreen` and `SettingsScreen`. When `SettingsScreen` creates a feed request notification, it sets the ref to `true` before the insert. When `StatusScreen`'s real-time listener fires, it checks the ref — if `true`, it skips the sound (but still updates the badge count). The same local `suppressNextNotificationSound` ref is set during `handleFeedClick` since feeding also creates a notification.
+* **Architectural Rule**: Any screen that programmatically inserts into the `notifications` table must set `suppressNotificationSoundRef.current = true` before the insert to prevent the sender hearing their own bell sound.
+* **Files changed**: `database.ts` (new function), `App.tsx` v3.7.0 → v3.8.0, `StatusScreen.tsx` v3.4.0 → v3.7.0, `SettingsScreen.tsx` v3.3.0 → v3.4.0.
+* **Dependency added**: `expo-av` for audio playback.
+
+**27 February 2026**
+* **Milestone**: Supabase Replication Configuration Fix.
+* **Problem**: After wiring up `subscribeToNotificationChanges()`, the bell badge still did not update in real time on any device. The subscription callback never fired. The `subscribeToHouseholdChanges()` listener (watching `pets` and `feeding_events`) worked perfectly — same code pattern, different table. Root cause: the `notifications` table was not included in the Supabase real-time replication publication (`supabase_realtime`).
+* **Action**: Enabled real-time replication for the `notifications` table in the Supabase Dashboard → Database → Replication.
+* **Architectural Rule**: Any table that uses Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) must be explicitly added to the `supabase_realtime` publication in the Supabase Dashboard. This is a per-table opt-in — it is not automatic. Failing to do this produces zero errors and zero logs; the subscription simply never fires.
+* **Outcome**: Bell badge updates in real time on all devices. Other-device notifications play a bell chime. Own-device actions are silent. Verified on real devices.
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions
@@ -212,9 +236,8 @@
 * **The Decision**: Established a strict sequential routing order in `AppRouter`: Gate 1 (`!isAuthenticated || !isEmailVerified`) routes to `AuthScreen`. Gate 2 (`!onboardingComplete`) routes to `OnboardingFlow`. Gate 3 routes to the main app (`StatusScreen`).
 * **The Risk**: This logic relies on `is_onboarding_completed` from Supabase and explicit check-before-create patterns to prevent duplicate keys during onboarding interruptions.
 
-**10. Stubbed Notification Logic (Feature Debt)**
-* **The Issue**: The "Ask member to feed" feature was visually integrated into the UI and gated for Pro users, but the button currently only fires a local `Alert.alert('Request Sent')`.
-* **The Risk**: The actual server-side trigger and push notification delivery system via Supabase remains unimplemented. This UI facade will cause user frustration if not fully wired up to the backend notification tables.
+**10. ~~Stubbed Notification Logic~~ (RESOLVED — 27 February 2026)**
+* **Resolution**: The "Ask member to feed" button now inserts a real `feed_request` notification into the Supabase `notifications` table via `addNotification()`. All household members see it in `NotificationsPanel`. Real-time subscription on the `notifications` table updates the bell badge and plays a sound on other devices.
 
 **11. Legacy AsyncStorage Cleanup & Drift (Structural Debt)**
 * **The Issue**: A massive purge removed 8 legacy bulk functions (`getAllUsers`, etc.). 
@@ -239,3 +262,11 @@
 **16. Undo Window & Subscription Enforcement (Architectural Decision)**
 * **The Decision**: A 2-minute undo window was established for the feeding flow, tracked via an `undo_deadline` timestamp, and Pro subscriptions were scoped strictly to the Household level (`households.is_pro`).
 * **The Risk**: If the undo window is only validated on the client side, users with skewed device clocks could bypass the restriction. Additionally, household-level subscription tier limits must be strictly enforced on the server side via Supabase functions or RLS policies, rather than solely hidden in the React Native UI.
+
+**17. Feed Request Enhancement Backlog (Feature Debt)**
+* **The Issue**: The "Ask member to feed" notification currently broadcasts to the entire household. It does not support targeting a specific member or selecting which pet(s) need feeding.
+* **The Risk**: As the app scales, users may find household-wide broadcasts noisy. Per-member targeting and pet selection should be added in a future iteration. The `notifications` table already has `member_name` and `requested_by` columns to support this.
+
+**18. Supabase Replication Must Be Explicitly Enabled Per Table (Infrastructure Rule)**
+* **The Decision**: Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) only fire if the target table is added to the `supabase_realtime` publication in the Supabase Dashboard → Database → Replication.
+* **The Risk**: This is a silent failure. No errors are thrown, no logs are emitted — the subscription simply never fires. Any new table that needs real-time subscriptions must be added to the publication before the subscription code will work. Currently enabled tables: `pets`, `feeding_events`, `households`, `user_households`, `notifications`.
