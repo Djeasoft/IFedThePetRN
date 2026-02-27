@@ -6,6 +6,7 @@
 // Version: 3.2.0 - Account section shows current user name + email above Sign Out
 // Version: 3.3.0 - Wire up "Ask member to feed" — real Supabase notification insert replaces Alert.alert stub
 // Version: 3.4.0 - Add suppressNotificationSoundRef prop to suppress bell sound on sender's device
+// Version: 3.5.0 - Wire up real invite email via Supabase Edge Function (send-invite-email)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -43,6 +44,7 @@ import {
   createUserHousehold,
   addNotification,
   sendMemberRemovedEmail,
+  sendInviteEmail,
   subscribeToSettingsChanges,
   getCachedScreenData,
   setCachedScreenData,
@@ -305,6 +307,14 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       const newUser = await createUser(name, email, false, 'Pending');
       await createUserHousehold(newUser.UserID, household.HouseholdID);
 
+      // Send real invite email via Edge Function
+      const emailSent = await sendInviteEmail(
+        email,
+        name,
+        household.HouseholdName,
+        household.InvitationCode
+      );
+
       // Add notification
       await addNotification({
         householdId: household.HouseholdID,
@@ -317,6 +327,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       setInviteName('');
       setInviteEmail('');
       loadData();
+
+      if (emailSent) {
+        Alert.alert('Invitation Sent', `An email has been sent to ${email} with instructions to join ${household.HouseholdName}.`);
+      } else {
+        Alert.alert('Member Added', `${name} was added but the invite email could not be sent. Share the invitation code manually: ${household.InvitationCode}`);
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to send invitation');
     }

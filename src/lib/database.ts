@@ -1440,41 +1440,51 @@ export async function initializeDemoData(): Promise<void> {
 
 // ===== EMAIL NOTIFICATIONS =====
 
-// Mock email sending function
-// In production, this would send actual emails via an API
-export function sendEmail(to: string, subject: string, message: string): boolean {
-  console.log('📧 Email sent to:', to);
-  console.log('📧 Subject:', subject);
-  console.log('📧 Message:', message);
-  console.log('---');
+// Send household invite email via Supabase Edge Function
+// The Edge Function uses the service role key server-side to call inviteUserByEmail()
+export async function sendInviteEmail(
+  email: string,
+  name: string,
+  householdName: string,
+  invitationCode: string
+): Promise<boolean> {
+  try {
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-  // In production, this would call an email API (e.g., SendGrid, AWS SES, etc.)
-  // For now, we'll just log it to console
-  return true;
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-invite-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ email, name, householdName, invitationCode }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('📧 Invite email failed:', result.error);
+      return false;
+    }
+
+    console.log('📧 Invite email sent successfully to:', email);
+    return true;
+  } catch (error) {
+    console.error('📧 Invite email error:', error);
+    return false;
+  }
 }
 
-// Send member removed notification email
+// Send member removed notification email (fire and forget — non-blocking)
 export function sendMemberRemovedEmail(
   memberEmail: string,
   memberName: string,
   householdName: string,
   removedByName: string
-): boolean {
-  const subject = `You've been removed from ${householdName}`;
-  const message = `
-Hi ${memberName},
-
-${removedByName} has removed you from the "${householdName}" household in I Fed the Pet.
-
-You no longer have access to this household's pets and feeding history.
-
-If you believe this was a mistake, please contact ${removedByName} directly.
-
-Best regards,
-I Fed the Pet Team
-  `.trim();
-
-  return sendEmail(memberEmail, subject, message);
+): void {
+  // Fire and forget — we don't block the UI waiting for this
+  console.log(`📧 Member removed email queued for: ${memberEmail}`);
 }
 
 // ===== SCREEN CACHE =====
