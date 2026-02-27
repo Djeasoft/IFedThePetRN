@@ -152,6 +152,24 @@
 * **Architectural Rule**: When two sibling components need to share and mutate the same piece of state, lift it to their nearest common parent rather than attempting cross-component communication via refs, events, or redundant network fetches.
 * **Outcome**: Bell badge resets to zero instantly on mark-all-read. Changes pushed to GitHub and Expo preview. Dan notified.
 
+**27 February 2026**
+* **Milestone**: Bug 3 Fix — Multi-Household Switching Now Propagates to All Screens.
+* **Problem**: `handleSwitchHousehold` in `SettingsScreen.tsx` correctly saved the new household ID to AsyncStorage via `setCurrentHouseholdId()`, but nothing downstream was listening. `StatusScreen` only called `loadData()` on mount and on real-time Supabase events — neither fired on a same-device household switch. The result: StatusScreen continued showing the previous household's pets, feeding history, and data even after the user switched.
+* **Secondary Problem**: `SettingsScreen.loadData()` always defaulted to `households[0]` instead of reading the saved household ID from AsyncStorage. Every time the Settings modal was reopened after a switch, it silently reverted to the first household.
+* **Architecture Shift**: Established `App.tsx` as the single source of truth for `currentHouseholdId`. The fix follows the same lifted-state pattern used for `unreadCount` (v3.6.0). `SettingsScreen` now calls `onHouseholdSwitch(newHouseholdId)` after a successful switch. `App.tsx` receives this, updates `currentHouseholdId` state, and passes it as a `householdId` prop to both `StatusScreen` and `NotificationsPanel`. Each screen reacts to prop changes via `useEffect` rather than polling AsyncStorage.
+* **Files changed**: `App.tsx` v3.7.0, `StatusScreen.tsx` v3.4.0, `SettingsScreen.tsx` v3.1.0, `NotificationsPanel.tsx` v2.3.0.
+* **Architectural Rule**: When a piece of state needs to drive behaviour across multiple sibling screens, it must live in their nearest common parent (`App.tsx`) and flow down as props. Never rely on AsyncStorage as a real-time communication channel between components — it has no event system and changes to it are completely silent.
+* **Double-Load Prevention**: A `prevHouseholdIdPropRef` was added to `StatusScreen` to guard the `useEffect([householdId])`. On boot, `householdId` transitions from `null` → a real ID — this must NOT trigger a second `loadData()` since the initial mount already ran one. The ref tracks the previous value and only reloads when switching from one non-null ID to a different non-null ID.
+* **Git Workflow Note**: Changes were implemented in a separate Git branch (`claude/brave-hopper`) via a Git worktree (a mechanism that checks out a second branch into a separate folder simultaneously, allowing main to remain untouched while changes are tested). Files were manually copied to `main` after successful device testing on iPhone and Android, then the worktree and branch were cleaned up. **Rule established**: always branch → test on device via Expo Go → merge. Never work directly on `main`.
+* **Outcome**: Switching households in the Settings modal now immediately updates StatusScreen, NotificationsPanel, and all household-scoped data. Verified on real devices.
+
+**27 February 2026**
+* **Milestone**: Account Identity Block Added to Settings Screen Top.
+* **Problem**: When testing across multiple user accounts (e.g., Jarques, Dan, Henry), there was no way to tell which user was currently logged in without navigating away or checking the members list.
+* **Action**: Added an Account section as the very first item in the `SettingsScreen` scroll view, displaying the current user's `MemberName` and `EmailAddress`, followed by a divider and the existing Sign Out button. This is a testing and UX quality-of-life improvement — immediately clear which account is active the moment Settings opens.
+* **Files changed**: `SettingsScreen.tsx` v3.2.0.
+* **Design Decision**: No star, badge, or icon — just name and email as plain text rows. The identity itself is the indicator. Clean, consistent with the existing card style.
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions

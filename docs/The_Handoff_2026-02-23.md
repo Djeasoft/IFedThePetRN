@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Monday, 23 February 2026, 19:00 GMT
+**Last Updated:** Thursday, 27 February 2026, 13:45 GMT
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — Item 3
+**Next Session:** Pick up from WHAT'S NEXT — Item 5
 
 ---
 
@@ -17,7 +17,7 @@
 
 **Phase A — COMPLETE**
 
-The app is live on Expo preview. Supabase backend is fully operational.
+The app is live on Expo preview. Supabase backend fully operational.
 
 What is verified and working:
 - Email authentication (signup, login, session persistence)
@@ -34,28 +34,30 @@ What is verified and working:
 - Household-scoped notifications stored in Supabase
 - Read/unread notification state persisted per user per household
 - 30-day notification auto-cleanup
-- Notification bell badge resets to zero after marking all read ✅ *(fixed this session)*
+- Notification bell badge resets to zero after marking all read ✅
+- Multi-household switching propagates to all screens ✅ *(fixed this session)*
+- Settings screen shows current user name + email at top ✅ *(added this session)*
 
 What is **not** working:
-- Multi-household switching via modal in SettingsScreen ❌
+- "Ask member to feed" — UI stub only, no server-side trigger ❌
+- Stale notification count for new household members ❌
+- Email invitations not sending ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Feed button and real-time sync re-verified by Jarques on 21 February 2026. Notification badge fix pushed to GitHub and Expo, Dan notified 23 February 2026.
+**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Multi-household switch fix manually applied by Jarques and verified on iPhone + Android, 27 February 2026.
 
 ---
 
 ## 2. WHAT'S BROKEN?
 
-*Source: Dan's Slack feedback, 20 February 2026*
-
 | # | Bug | Severity | Notes |
 |---|-----|----------|-------|
-| 1 | ~~Real-time sync not firing — Henry feeds pet, Daniel's StatusScreen does not update automatically~~ | ✅ Fixed | Root cause: `getCurrentUserId()` returned null after cache clear — no fallback to Supabase session. Fix: self-healing fallback added to `database.ts`. |
-| 2 | ~~Feed button did nothing on press — no logs fired~~ | ✅ Fixed | Root cause: naming collision in `StatusScreen.tsx` — state `setCurrentHouseholdId` shadowed the DB import. Fix: renamed state to `activeHouseholdId` in `StatusScreen.tsx` v3.2.0. |
-| 3 | Multi-household switching — switching households does not update StatusScreen | 🔴 Critical | Switcher modal exists in Settings but selection does not propagate to StatusScreen |
-| 4 | ~~Notification bell badge count does not reset after marking all read~~ | ✅ Fixed | Root cause: `unreadCount` was local state in StatusScreen, never updated when NotificationsPanel marked items as read. Fix: lifted `unreadCount` to App.tsx as shared state, passed down to both StatusScreen (reads) and NotificationsPanel (writes). See App.tsx v3.6.0, StatusScreen.tsx v3.3.0, NotificationsPanel.tsx v2.2.0. |
-| 5 | "Ask member to feed" notification not received by the other user | 🟠 High | Feature is stubbed — UI fires local Alert only, no server-side trigger |
-| 6 | New household member inherits stale notification count from previous sessions | 🟡 Minor | Henry joined and saw 12 unread from Daniel's prior activity |
-| 7 | Email invitations not sending | 🟠 High | `handleInviteMember` creates the pending user + household link correctly but never sends an email. `sendEmail()` in `database.ts` is a mock (console.log only). Fix requires Supabase Edge Function + SMTP. See Item 8 in What's Next. |
+| 1 | ~~Real-time sync not firing~~ | ✅ Fixed | `getCurrentUserId()` self-heals from Supabase session when AsyncStorage is empty |
+| 2 | ~~Feed button did nothing on press~~ | ✅ Fixed | Naming collision in `StatusScreen.tsx` — renamed state to `activeHouseholdId` |
+| 3 | ~~Multi-household switching does not update StatusScreen~~ | ✅ Fixed | `App.tsx` is now source of truth for `currentHouseholdId`. Prop-driven flow: SettingsScreen → `onHouseholdSwitch` → App.tsx → StatusScreen + NotificationsPanel |
+| 4 | ~~Notification bell badge count does not reset after marking all read~~ | ✅ Fixed | `unreadCount` lifted to App.tsx shared state |
+| 5 | "Ask member to feed" notification not received by other user | 🟠 High | Feature stubbed — UI fires local Alert only, no server-side trigger |
+| 6 | New household member inherits stale notification count | 🟡 Minor | Henry joined and saw 12 unread from Daniel's prior activity |
+| 7 | Email invitations not sending | 🟠 High | `sendEmail()` in `database.ts` is a mock (console.log only). Fix requires Supabase Edge Function + SMTP |
 
 ---
 
@@ -63,23 +65,16 @@ What is **not** working:
 
 *Work through in order. Do not skip ahead.*
 
-- [x] **1. Fix real-time StatusScreen sync** — Resolved. `getCurrentUserId()` now self-heals from Supabase session when AsyncStorage is empty.
-
-- [x] **2. Fix feed button** — Resolved. Naming collision in `StatusScreen.tsx` between state setter and DB import. Renamed state to `activeHouseholdId`.
-
-- [ ] **3. Fix multi-household switching** — Switching households via the Settings modal does not update StatusScreen. Investigate how the selected household ID is saved and whether StatusScreen re-loads on change.
-
-- [x] **4. Fix notification bell badge auto-refresh** — Resolved. `unreadCount` lifted from StatusScreen local state to App.tsx shared state. NotificationsPanel now calls `onUnreadCountChange` after mark-as-read actions, updating the bell badge instantly.
-
-- [ ] **5. Wire up "Ask member to feed" notification** — Replace the local `Alert.alert('Request Sent')` stub with an actual insert into the Supabase notifications table, triggering a real notification to the target household member.
-
-- [ ] **6. Fix stale notification inheritance for new members** — When a user joins a household via code, only show notifications from their join date onward, or mark all prior notifications as read on join.
-
-- [ ] **7. Plan Phase B** — Once Items 3 and 5 are resolved and re-tested with Dan, open Phase B planning: Apple/Google OAuth, React Navigation, component extraction, and MVP prep.
-
-- [ ] **8. Wire up email invitations** — `handleInviteMember` in `SettingsScreen.tsx` already creates the pending user and household link correctly. What's missing is the actual email send. Plan agreed: Supabase Edge Function (`send-invite-email`) calling Supabase's built-in SMTP. **Prerequisites before starting:**
-  - Install Supabase CLI — `npm install -g supabase` does NOT work on Windows. Use the Windows installer instead: https://github.com/supabase/cli#install-the-cli
-  - Configure SMTP in Supabase dashboard → Authentication → Settings → SMTP Settings (retrieve credentials from existing email provider first)
+- [x] **1. Fix real-time StatusScreen sync**
+- [x] **2. Fix feed button**
+- [x] **3. Fix multi-household switching**
+- [x] **4. Fix notification bell badge auto-refresh**
+- [ ] **5. Wire up "Ask member to feed" notification** — Replace `Alert.alert('Request Sent')` stub in `SettingsScreen.tsx` with a real insert into the Supabase `notifications` table. Target: the selected household member receives it in their NotificationsPanel.
+- [ ] **6. Fix stale notification inheritance for new members** — When a user joins via code, mark all prior notifications as read on join, or filter by join date.
+- [ ] **7. Plan Phase B** — Once Items 5 and 6 are resolved and re-tested with Dan, open Phase B: Apple/Google OAuth, React Navigation, component extraction, MVP prep.
+- [ ] **8. Wire up email invitations** — `handleInviteMember` in `SettingsScreen.tsx` creates the pending user correctly but never sends an email. Plan: Supabase Edge Function (`send-invite-email`) + SMTP.
+  - Install Supabase CLI (Windows installer only): https://github.com/supabase/cli#install-the-cli
+  - Configure SMTP: Supabase dashboard → Authentication → Settings → SMTP Settings
   - Supabase Project ID: `dswbgtbrorhxxnargbdw`
   - From address: `noreply@ifedthepet.app`
 
@@ -87,11 +82,9 @@ What is **not** working:
 
 ## 4. KNOWN TECHNICAL DEBT (TOP PRIORITIES ONLY)
 
-*Full debt register lives in The Compass. These are the pre-launch blockers.*
-
 | # | Item | When to Fix |
 |---|------|-------------|
-| D1 | RLS policies disabled — anyone with anon key has unrestricted DB access | Before launch |
+| D1 | RLS policies disabled — unrestricted DB access via anon key | Before launch |
 | D2 | Email verification disabled in Supabase dashboard | Before launch |
 | D3 | Expo Go deep linking limitations — custom URL scheme not supported | Before production build |
 | D4 | Optimistic UI has no offline queue — failed syncs roll back silently | Post-MVP |
@@ -100,8 +93,6 @@ What is **not** working:
 
 ## 5. PROJECT CONTEXT (FOR AI ONBOARDING)
 
-Paste this section at the start of a new AI session to align quickly.
-
 **App:** I Fed The Pet — React Native / Expo mobile app for pet feeding coordination across shared households.
 
 **Stack:** React Native, Expo, TypeScript, Supabase (auth + real-time DB), AsyncStorage (cache + session tokens only).
@@ -109,24 +100,24 @@ Paste this section at the start of a new AI session to align quickly.
 **Architecture patterns to know:**
 - Cache-first loading → silent background Supabase refresh
 - Optimistic UI on feed button → background sync → rollback on failure
-- suppressNextRealtimeLoad ref → prevents own-device update echo
+- `suppressNextRealtimeLoad` ref → prevents own-device update echo
 - Two-phase user creation → minimal record on signup, full profile during onboarding
 - Pessimistic UI on Pro toggle → awaits DB confirmation before UI change
-- Household-scoped subscriptions → all real-time listeners filter by householdId
-- getCurrentUserId() is self-healing → falls back to Supabase session if AsyncStorage is empty
-- Lifted state pattern for cross-component data → unreadCount owned by App.tsx, shared between StatusScreen and NotificationsPanel
+- Household-scoped subscriptions → all real-time listeners filter by `householdId`
+- `getCurrentUserId()` is self-healing → falls back to Supabase session if AsyncStorage is empty
+- Lifted state pattern → `unreadCount` and `currentHouseholdId` owned by `App.tsx`, shared across screens via props
+- Prop-driven household switching → `App.tsx` is the single source of truth for `currentHouseholdId`; all screens receive it as a prop
 
-**Key fixes to know:**
-- `StatusScreen.tsx` uses `activeHouseholdId` (state) not `currentHouseholdId` — renamed in v3.2.0 to resolve a naming collision with the DB import of the same name.
-- `unreadCount` lives in App.tsx (v3.6.0), not in StatusScreen — lifted to allow NotificationsPanel to update the bell badge via `onUnreadCountChange` callback.
+**Key naming to know:**
+- `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
+- `unreadCount` lives in `App.tsx` (v3.6.0), not StatusScreen
+- `currentHouseholdId` lives in `App.tsx` (v3.7.0), passed as `householdId` prop to `StatusScreen` and `NotificationsPanel`
 
-**Current status:** Phase A complete. One active bug: multi-household switching (Bug 3). That is the active work.
-
-**Docs folder:** `/IFedThePetRN/docs/` on GitHub
-- `The Compass` — architectural decision log and technical debt register
-- `The Spec` — feature requirement docs (delete when feature is verified in code)
-- `The Triage` — reactive bug patch reports (delete when bugs are resolved)
-- `The Handoff` — this file, always current, rewritten each session
+**Current file versions:**
+- `App.tsx` v3.7.0
+- `StatusScreen.tsx` v3.4.0
+- `SettingsScreen.tsx` v3.2.0
+- `NotificationsPanel.tsx` v2.3.0
 
 ---
 
