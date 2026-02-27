@@ -163,21 +163,21 @@
 * **Git Workflow Note**: Changes were implemented in a separate Git branch (`claude/brave-hopper`) via a Git worktree (a mechanism that checks out a second branch into a separate folder simultaneously, allowing main to remain untouched while changes are tested). Files were manually copied to `main` after successful device testing on iPhone and Android, then the worktree and branch were cleaned up. **Rule established**: always branch → test on device via Expo Go → merge. Never work directly on `main`.
 * **Outcome**: Switching households in the Settings modal now immediately updates StatusScreen, NotificationsPanel, and all household-scoped data. Verified on real devices.
 
-**27 February 2026**
+**27 February 2026 — Session 1**
 * **Milestone**: Account Identity Block Added to Settings Screen Top.
 * **Problem**: When testing across multiple user accounts (e.g., Jarques, Dan, Henry), there was no way to tell which user was currently logged in without navigating away or checking the members list.
 * **Action**: Added an Account section as the very first item in the `SettingsScreen` scroll view, displaying the current user's `MemberName` and `EmailAddress`, followed by a divider and the existing Sign Out button. This is a testing and UX quality-of-life improvement — immediately clear which account is active the moment Settings opens.
 * **Files changed**: `SettingsScreen.tsx` v3.2.0.
 * **Design Decision**: No star, badge, or icon — just name and email as plain text rows. The identity itself is the indicator. Clean, consistent with the existing card style.
 
-**27 February 2026**
+**27 February 2026 — Session 2**
 * **Milestone**: Item 5 — "Ask Member to Feed" Notification Wired Up.
 * **Problem**: The "Ask member to feed" button in `SettingsScreen.tsx` fired only a local `Alert.alert('Request Sent')` stub. No data was written to Supabase, and no other household members were notified.
 * **Action**: Replaced the stub `onPress` handler with an async function calling `addNotification()` with parameters: `householdId`, `type: 'feed_request'`, `message: "[RequesterName] asked [TargetName] to feed the pet(s)"`, `memberName`, `requestedBy`. No schema changes were required — the `notifications` table, `addNotification()` function, and `NotificationsPanel` rendering for `feed_request` type were already in place from the notification migration.
 * **Files changed**: `SettingsScreen.tsx` v3.2.0 → v3.3.0.
 * **Outcome**: Tapping "Ask [Member] to feed" now inserts a real notification into Supabase. All household members see it in their `NotificationsPanel`.
 
-**27 February 2026**
+**27 February 2026 — Session 3**
 * **Milestone**: Real-Time Notification Subscription & Bell Sound.
 * **Problem**: The notification bell badge on `StatusScreen` only updated when the user manually opened `NotificationsPanel` or when `loadData()` ran (triggered by pet/feeding changes). Standalone notifications like `feed_request` had no real-time listener — only `pets` and `feeding_events` tables had subscriptions.
 * **Action**: Added `subscribeToNotificationChanges()` in `database.ts` — a Supabase real-time WebSocket subscription on the `notifications` table filtered by `household_id`, listening for `INSERT` events only. Added a bell chime sound using `expo-av` (`assets/notification_bell.wav`). When the real-time listener fires from another device's action, `StatusScreen` plays the bell and refreshes the unread count.
@@ -187,12 +187,36 @@
 * **Files changed**: `database.ts` (new function), `App.tsx` v3.7.0 → v3.8.0, `StatusScreen.tsx` v3.4.0 → v3.7.0, `SettingsScreen.tsx` v3.3.0 → v3.4.0.
 * **Dependency added**: `expo-av` for audio playback.
 
-**27 February 2026**
+**27 February 2026 — Session 4**
 * **Milestone**: Supabase Replication Configuration Fix.
 * **Problem**: After wiring up `subscribeToNotificationChanges()`, the bell badge still did not update in real time on any device. The subscription callback never fired. The `subscribeToHouseholdChanges()` listener (watching `pets` and `feeding_events`) worked perfectly — same code pattern, different table. Root cause: the `notifications` table was not included in the Supabase real-time replication publication (`supabase_realtime`).
 * **Action**: Enabled real-time replication for the `notifications` table in the Supabase Dashboard → Database → Replication.
 * **Architectural Rule**: Any table that uses Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) must be explicitly added to the `supabase_realtime` publication in the Supabase Dashboard. This is a per-table opt-in — it is not automatic. Failing to do this produces zero errors and zero logs; the subscription simply never fires.
 * **Outcome**: Bell badge updates in real time on all devices. Other-device notifications play a bell chime. Own-device actions are silent. Verified on real devices.
+
+**27 February 2026 — Session 5**
+* **Milestone**: Real-time notification bell + "Ask member to feed" fully wired.
+* **Action**: `SettingsScreen.tsx` v3.3.0 → v3.4.0. "Ask member to feed" button now inserts a real `feed_request` notification into Supabase via `addNotification()`.
+* **Action**: Added real-time subscription on the `notifications` table. Bell badge updates instantly on all devices when a new notification arrives.
+* **Action**: Bell chime sound (`expo-av`) plays on receiving devices. `suppressNotificationSoundRef` lifted to `App.tsx` and passed as a prop to `StatusScreen` and `SettingsScreen` — prevents the sender hearing their own bell.
+* **Bug Fixed**: Bell badge not updating in real time — root cause was `notifications` table missing from Supabase Replication. Fixed by enabling it in Dashboard → Database → Replication.
+* **Verified**: Jarques tested on iPhone + Android simultaneously. Real-time bell and sound confirmed working cross-device.
+
+**27 February 2026 — Session 6**
+* **Milestone**: Email invitations fully wired via Supabase Edge Function.
+* **Security Fix**: Discovered that `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `.env` was actually the service role key (JWT payload contained `"role": "service_role"`). This gave the client app full admin DB access. Replaced with the correct anon key immediately.
+* **Architecture Decision**: Sensitive server-side operations requiring the service role key must never run in the app bundle. Established the Edge Function pattern — deploy a Supabase Edge Function that holds the service role key as a Supabase secret, called from the app via `fetch()` with the anon key as a Bearer token.
+* **Action**: Installed Supabase CLI v2.75.0 (Windows). Logged in and linked to project `dswbgtbrorhxxnargbdw`.
+* **Action**: Created and deployed Supabase Edge Function `send-invite-email`. Uses `supabase.auth.admin.inviteUserByEmail()` with the service role key injected automatically by Supabase as `SUPABASE_SERVICE_ROLE_KEY` (built-in secret, not manually set).
+* **Action**: Replaced mock `sendEmail()` in `database.ts` with real `sendInviteEmail()` function that calls the Edge Function via `fetch()`.
+* **Action**: Updated `handleInviteMember` in `SettingsScreen.tsx` v3.4.0 → v3.5.0. Now calls `sendInviteEmail()` after creating the pending user. Shows success alert with household name, or graceful fallback alert with manual code if email fails.
+* **Action**: Updated Supabase email template (Authentication → Email Templates → Invite user) with step-by-step join instructions and `{{ .Token }}` to display the invitation code prominently.
+* **Decision**: Removed `{{ .ConfirmationURL }}` link from email template — it leads to a blank page until deep linking is implemented in Phase B. Cleaner UX to exclude it entirely for now.
+* **Decision**: `{{ .Household }}` is not a valid Supabase template variable — household name cannot be injected into the template without a custom SMTP email body. Deferred to Phase B.
+* **Verified**: Real invite email received in inbox with invitation code and join instructions.
+* **Future consideration noted**: Deep link in invite email (open app directly to Join Household screen with code pre-filled) — requires production build + custom URL scheme. Phase B item.
+* **Future consideration noted**: Custom email body via SMTP from Edge Function would give full control over email content including household name. Phase B item.
+* **Future consideration noted**: `sendMemberRemovedEmail()` is currently a no-op. Wire up a proper removal notification email in Phase B.
 
 ---
 
