@@ -3,6 +3,7 @@
 // Version: 2.0.0 - Supabase integration with per-user read tracking
 // Version: 2.1.0 - Cross-household: shows notifications from ALL user's households
 // Version: 2.2.0 - Fix: onUnreadCountChange callback syncs badge count with App.tsx
+// Version: 2.3.0 - Fix: householdId prop scopes notifications to the active household
 // Shows all notifications with mark as read functionality
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
+  getAllNotifications,
   getAllNotificationsForUser,
   markNotificationAsRead,
   markAllNotificationsAsReadForUser,
@@ -30,16 +32,19 @@ interface NotificationsPanelProps {
   visible: boolean;
   onClose: () => void;
   userId?: string;
+  // FIX v2.3.0: Passed from App.tsx to scope notifications to the active household
+  householdId?: string;
   // FIX v2.2.0: Callback to sync unread count with App.tsx bell badge
   onUnreadCountChange?: (count: number) => void;
 }
 
-export function NotificationsPanel({ visible, onClose, userId, onUnreadCountChange }: NotificationsPanelProps) {
+export function NotificationsPanel({ visible, onClose, userId, householdId, onUnreadCountChange }: NotificationsPanelProps) {
   const { theme } = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Load notifications from ALL households
+  // FIX v2.3.0: Load notifications scoped to the active household when householdId is available.
+  // Falls back to cross-household fetch if householdId is not yet known.
   const loadNotifications = useCallback(async () => {
     if (!userId) {
       console.log('🔔 NotificationsPanel: No userId, skipping load');
@@ -48,8 +53,10 @@ export function NotificationsPanel({ visible, onClose, userId, onUnreadCountChan
     }
     try {
       setLoading(true);
-      console.log('🔔 NotificationsPanel: Loading notifications for userId:', userId);
-      const allNotifications = await getAllNotificationsForUser(userId);
+      console.log('🔔 NotificationsPanel: Loading notifications for userId:', userId, 'householdId:', householdId);
+      const allNotifications = householdId
+        ? await getAllNotifications(householdId, userId)
+        : await getAllNotificationsForUser(userId);
       console.log('🔔 NotificationsPanel: Loaded', allNotifications.length, 'notifications');
       setNotifications(allNotifications);
       // FIX v2.2.0: Sync initial unread count with bell badge on load
@@ -60,7 +67,7 @@ export function NotificationsPanel({ visible, onClose, userId, onUnreadCountChan
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, householdId]);
 
   useEffect(() => {
     if (visible) {

@@ -5,6 +5,7 @@
 // Version: 3.1.0 - Fix: onStatusReady callback, one-time legacy cleanup
 // Version: 3.2.0 - Fix: naming collision between state setter and DB import for currentHouseholdId
 // Version: 3.3.0 - Fix: unreadCount lifted to App.tsx — now received and updated via props
+// Version: 3.4.0 - Fix: householdId prop from App.tsx drives reload on household switch
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -50,6 +51,8 @@ interface StyledStatusScreenProps {
   // FIX v3.3.0: Lifted to App.tsx — badge count is now shared with NotificationsPanel
   unreadCount: number;
   onUnreadCountChange: (count: number) => void;
+  // FIX v3.4.0: App.tsx passes the active household ID as prop so switches propagate here
+  householdId?: string;
 }
 
 interface HistoryEventDetails {
@@ -76,6 +79,7 @@ export function StyledStatusScreen({
   onStatusReady,
   unreadCount,
   onUnreadCountChange,
+  householdId,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
 
@@ -304,6 +308,23 @@ export function StyledStatusScreen({
 
     return () => unsubscribe();
   }, [activeHouseholdId]);  // FIX: was currentHouseholdId
+
+  // FIX v3.4.0: React to household switches driven by App.tsx.
+  // When App.tsx changes the householdId prop (after SettingsScreen reports a switch),
+  // reload the screen for the new household.
+  //
+  // The ref prevents a double-load on initial boot:
+  //   null → id_A  (App.tsx gets the ID from onStatusReady; initial loadData already ran — skip)
+  //   id_A → id_B  (actual switch — reload) ✅
+  const prevHouseholdIdPropRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevHouseholdIdPropRef.current;
+    prevHouseholdIdPropRef.current = householdId ?? null;
+
+    if (householdId && prev && householdId !== prev) {
+      loadData({ skipCache: true });
+    }
+  }, [householdId]);
 
   // Handle pet selection
   const handlePetToggle = (petId: string) => {

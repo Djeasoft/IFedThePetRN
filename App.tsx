@@ -11,6 +11,7 @@
 // Version: 3.4.0 - Detect orphaned users (completed onboarding but database missing) and log them out
 // Version: 3.5.0 - Fix notifications: get IDs from StatusScreen ready callback, not one-time useEffect
 // Version: 3.6.0 - Fix: Lift unreadCount to App level so NotificationsPanel mark-as-read updates the bell badge
+// Version: 3.7.0 - Fix: App.tsx is now source of truth for currentHouseholdId; passes it as prop to all screens so household switches propagate correctly
 
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
@@ -129,6 +130,12 @@ function AppRouter() {
     if (householdId !== currentHouseholdId) setCurrentHouseholdId(householdId);
   };
 
+  // FIX v3.7.0: Called by SettingsScreen after a successful household switch.
+  // App.tsx updates its own currentHouseholdId state, which propagates to all screens via props.
+  const handleHouseholdSwitch = (newHouseholdId: string) => {
+    setCurrentHouseholdId(newHouseholdId);
+  };
+
   // Loading state
   if (authLoading || (isAuthenticated && isEmailVerified && checkingOnboarding)) {
     return (
@@ -157,16 +164,19 @@ function AppRouter() {
         onStatusReady={handleStatusReady}
         unreadCount={unreadCount}
         onUnreadCountChange={setUnreadCount}
+        householdId={currentHouseholdId ?? undefined}
       />
       <SettingsScreen
         visible={showSettings}
         onClose={handleCloseSettings}
         onResetOnboarding={handleResetFromSettings}
+        onHouseholdSwitch={handleHouseholdSwitch}
       />
       <NotificationsPanel
         visible={showNotifications}
         onClose={handleCloseNotifications}
         userId={currentUserId ?? undefined}
+        householdId={currentHouseholdId ?? undefined}
         onUnreadCountChange={setUnreadCount}
       />
     </>

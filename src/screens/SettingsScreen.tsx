@@ -2,6 +2,8 @@
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - Added resetToNewUser() for dev/testing
 // Version: 3.0.0 - Multi-Household Switcher Implementation
+// Version: 3.1.0 - Fix: household switch propagates to StatusScreen via onHouseholdSwitch callback; loadData respects saved household
+// Version: 3.2.0 - Account section shows current user name + email above Sign Out
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -68,9 +70,10 @@ interface SettingsScreenProps {
   visible: boolean;
   onClose: () => void;
   onResetOnboarding?: () => void;
+  onHouseholdSwitch?: (householdId: string) => void;
 }
 
-export function SettingsScreen({ visible, onClose, onResetOnboarding }: SettingsScreenProps) {
+export function SettingsScreen({ visible, onClose, onResetOnboarding, onHouseholdSwitch }: SettingsScreenProps) {
   const { isDark, theme, toggleTheme } = useTheme();
 
   // State
@@ -170,7 +173,10 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
       }
 
       if (households.length > 0) {
-        const hh = households[0];
+        // FIX v3.1.0: Respect the household saved in AsyncStorage instead of always using households[0].
+        // Without this, reopening Settings after a switch would silently revert to the first household.
+        const savedId = await getCurrentHouseholdId();
+        const hh = households.find(h => h.HouseholdID === savedId) ?? households[0];
         setHousehold(hh);
         setHouseholdNameInput(hh.HouseholdName);
         setAllHouseholds(households);
@@ -587,6 +593,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
 
       // Close modal
       setShowHouseholdSwitcher(false);
+
+      // FIX v3.1.0: Notify App.tsx so it can propagate the new household ID to all screens
+      onHouseholdSwitch?.(newHouseholdId);
     } catch (error) {
       Alert.alert('Error', `Failed to switch household: ${(error as Error).message}`);
       console.error('Error switching household:', error);
@@ -717,6 +726,26 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
             </View>
           ) : (
             <>
+              {/* Account Section */}
+              <SectionHeader title="Account" />
+              <View style={[styles.card, { backgroundColor: theme.surface }]}>
+                {/* Current user identity — useful when testing across multiple accounts */}
+                <View style={styles.accountIdentityRow}>
+                  <Text style={[styles.accountName, { color: theme.text }]}>
+                    {currentUser?.MemberName ?? '—'}
+                  </Text>
+                  <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>
+                    {currentUser?.EmailAddress ?? '—'}
+                  </Text>
+                </View>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                <SettingsRow
+                  label="Sign Out"
+                  onPress={handleSignOut}
+                  destructive
+                />
+              </View>
+
               {/* Household Section */}
               <SectionHeader title="Household" />
               <View style={[styles.card, { backgroundColor: theme.surface }]}>
@@ -1243,16 +1272,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding }: Settings
                   label="Terms of Service"
                   onPress={() => handleOpenLink('https://ifedthepet.com/terms')}
                   showChevron
-                />
-              </View>
-
-              {/* Account Section */}
-              <SectionHeader title="Account" />
-              <View style={[styles.card, { backgroundColor: theme.surface }]}>
-                <SettingsRow
-                  label="Sign Out"
-                  onPress={handleSignOut}
-                  destructive
                 />
               </View>
 
@@ -2302,6 +2321,20 @@ const styles = StyleSheet.create({
   upgradeFooter: {
     fontSize: fontSize.xs,
     textAlign: 'center',
+  },
+
+  // Account identity block
+  accountIdentityRow: {
+    paddingVertical: spacing.base,
+    paddingHorizontal: spacing.lg,
+  },
+  accountName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    marginBottom: 2,
+  },
+  accountEmail: {
+    fontSize: fontSize.sm,
   },
 
   // Version
