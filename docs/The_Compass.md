@@ -218,6 +218,38 @@
 * **Future consideration noted**: Custom email body via SMTP from Edge Function would give full control over email content including household name. Phase B item.
 * **Future consideration noted**: `sendMemberRemovedEmail()` is currently a no-op. Wire up a proper removal notification email in Phase B.
 
+**28 February 2026 — Session 1**
+* **Milestone**: Invited User Signup Unblocked — `claim-invite` Edge Function.
+* **Problem**: After an admin sent an invite email via the `send-invite-email` Edge Function, `supabase.auth.admin.inviteUserByEmail()` created a ghost auth record in Supabase's `auth.users` table for the invitee's email. When the invitee then tapped "Sign up free with email" and called `supabase.auth.signUp()`, Supabase threw `AuthApiError: User already registered` — the invitee was completely unable to enter the app.
+* **Root Cause**: The Edge Function returned the ghost auth user's ID, but `sendInviteEmail()` in `database.ts` discarded it (returned only `boolean`). The ghost auth ID was never stored anywhere, so there was no way to identify and update the correct auth record later.
+* **Secondary Bug**: `handleMemberComplete` in `OnboardingFlow.tsx` called `createUserHousehold()` for a link that `handleInviteMember` had already created — risking a duplicate or unique constraint error.
+* **Architecture Decision — Claim-Invite Pattern**: Rather than removing `inviteUserByEmail()`, the solution keeps the ghost auth user and exposes a new `claim-invite` Edge Function that uses the service role key to set a password and confirm the email on the ghost user via `supabase.auth.admin.updateUserById()`. The invited user picks their own password — consistent with normal signup UX. No new external services or deep links required.
+* **Action**: Created and deployed Supabase Edge Function `claim-invite/index.ts`. Security model: validates the email exists in `users` with `invitation_status = 'Pending'` and a non-null `auth_user_id` before touching anything.
+* **Action**: `sendInviteEmail()` in `database.ts` return type changed from `Promise<boolean>` to `Promise<string | false>` — now returns the ghost auth user ID on success.
+* **Action**: `handleInviteMember` in `SettingsScreen.tsx` now stores the returned ghost auth ID on the pending user record via `updateUser(newUser.UserID, { AuthUserID: ghostAuthUserId })`.
+* **Action**: New `claimInvite(email, password)` function added to `database.ts` — calls the `claim-invite` Edge Function.
+* **Action**: `createUserHousehold()` made idempotent — checks for existing `(user_id, household_id)` link before inserting. Returns existing record silently if found.
+* **Action**: `AuthScreen.handleSignUp` now calls `getUserByEmail` first. If `InvitationStatus === 'Pending'` → calls `claimInvite` + `signInWithEmail` (no new auth record created). If `InvitationStatus === 'Active'` → clear error directing to login screen. Normal new user → original signup path unchanged.
+* **Files changed**: NEW `supabase/functions/claim-invite/index.ts`, `database.ts`, `SettingsScreen.tsx` v3.5.0 → v3.6.0, `AuthScreen.tsx` v1.1.0 → v1.2.0.
+* **Architectural Rules Established**:
+  - Ghost auth ID thread-through rule: any caller of `sendInviteEmail()` must store the returned `string | false` and call `updateUser({ AuthUserID: ghostId })` if non-empty. If skipped, `claim-invite` will reject with "Invitation was not properly set up."
+  - `createUserHousehold` must always be idempotent. The invite flow pre-creates the link; onboarding re-calls the same function. Without idempotency this produces a duplicate or constraint error.
+* **Verified**: Fresh invited user (jzwennis@icloud.com / Jay) signed up, landed in OnboardingFlow, joined household, reached StatusScreen. No errors. Tested on device by Jarques, 28 February 2026.
+
+**28 February 2026 — Session 2**
+* **Milestone**: Bug #8 Fixed — New Members No Longer Inherit Stale Notification History.
+* **Problem**: When a new user joined a household, they saw the full history of household notifications in `NotificationsPanel` (e.g. Henry saw 12 unread notifications from Daniel's activity before Henry joined). The bell badge reflected the same inflated count. Both `getAllNotifications` and `getUnreadNotificationsCount` queried the `notifications` table by `household_id` only — no filter for when the requesting user joined.
+* **Root Cause**: `user_households.created_at` (the user's join timestamp) existed but was never used in any notification query.
+* **Action**: Applied a join-date filter to both `getAllNotifications` and `getUnreadNotificationsCount` in `database.ts`. Each function now first fetches `created_at` from `user_households` for the current user/household pair (via `.maybeSingle()`), then applies `.gte('created_at', joinDate)` to the notifications query. If the membership row is not found, `joinDate` falls back to `null` and the filter is skipped — degrading gracefully to the previous behaviour rather than breaking. Existing members are unaffected: their join date predates all notifications, so `.gte` returns the full history.
+* **Architectural Rule Established — Join-date filter rule**: Any function that queries the `notifications` table on behalf of a specific user must also fetch `user_households.created_at` for that user/household pair and apply `.gte('created_at', joinDate)`. Both `getAllNotifications` and `getUnreadNotificationsCount` must always use the same filter — if one is updated, the other must be updated too. Failure to keep them in sync causes the badge and panel to show different counts.
+
+* **Milestone**: Duplicate `member_joined` Notifications Fixed — Loading Guard in OnboardingFlow.
+* **Problem**: When Jay joined a household, two identical `member_joined` notifications appeared in the database 1.26 seconds apart. No database trigger existed — the double insert came purely from `handleMemberComplete` in `OnboardingFlow.tsx` being called twice. The "Join Household" button remained enabled while async DB operations were in flight, and the keyboard `onSubmitEditing` handler provided a second trigger path that could fire simultaneously with a button tap.
+* **Action**: Added `isLoading` state to `OnboardingFlow.tsx`. Four guard points: `if (isLoading) return` at top of `handleMemberComplete`; `setIsLoading(true)` before try block with `setIsLoading(false)` in finally; `disabled={!canContinue() || isLoading}` on the button; `!isLoading` guard added to `onSubmitEditing`. Button label changes to "Joining..." while in flight so the user has visual feedback.
+* **Architectural Rule Established — Loading guard rule**: Any async submit handler in an onboarding or join flow must have an `isLoading` guard (state or ref) that prevents re-entry. Both the button's `disabled` prop and any keyboard `onSubmitEditing` handler must check the same guard.
+* **Files changed**: `database.ts` (`getAllNotifications`, `getUnreadNotificationsCount`), `OnboardingFlow.tsx` (isLoading guard).
+* **Verified**: Fresh user joined household with existing notification history. Bell badge showed 0. Panel matched badge. Only one `member_joined` entry in database. Tested on device by Jarques, 28 February 2026.
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions
@@ -294,3 +326,11 @@
 **18. Supabase Replication Must Be Explicitly Enabled Per Table (Infrastructure Rule)**
 * **The Decision**: Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) only fire if the target table is added to the `supabase_realtime` publication in the Supabase Dashboard → Database → Replication.
 * **The Risk**: This is a silent failure. No errors are thrown, no logs are emitted — the subscription simply never fires. Any new table that needs real-time subscriptions must be added to the publication before the subscription code will work. Currently enabled tables: `pets`, `feeding_events`, `households`, `user_households`, `notifications`.
+
+**19. Invited User Onboarding Path Not Guarded (UX/Logic Debt)**
+* **The Issue**: When a user arrives via the claim-invite flow, the onboarding welcome screen still presents both "Create Household" and "Join Household" as equal options. An invited user who taps "Create Household" ends up with a spurious extra household in addition to being linked to the invited household — because `createUserHousehold` idempotency means the invite link is preserved, but a new household is also created.
+* **The Risk**: The user ends up with an unexpected extra household visible in Settings. The fix requires detecting the invited user state (e.g. `InvitationStatus === 'Pending'` on the DB user record at the start of onboarding) and either routing them directly to the Join path or showing a clear warning before allowing Create.
+
+**20. Self-Notification on Household Creation (UX Debt)**
+* **The Issue**: When a user creates a new household, a `member_joined` or `household_created` notification is inserted and appears in their own NotificationsPanel and bell badge. The creator is notifying themselves of an action they just performed.
+* **The Risk**: This is noise that could erode trust in the notification system. The fix is either to suppress the notification insert entirely for the creator, or to filter out notifications where `requested_by` equals the current user's ID in both `getAllNotifications` and `getUnreadNotificationsCount`.
