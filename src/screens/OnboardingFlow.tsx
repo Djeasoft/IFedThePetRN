@@ -2,6 +2,7 @@
 // Version: 1.0.0 - React Native with Theme Support
 // Version: 2.0.0 - Added resetToNewUser() for dev/testing, new method getUserByEmail
 // Version: 3.0.0 - Supabase Auth integration, removed email step (email from auth)
+// Version: 4.0.0 - New set onloading for new users
 
 import React, { useState } from 'react';
 import {
@@ -54,6 +55,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     inviteCode: '',
   });
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Email comes from Supabase Auth
   const email = authUser?.email ?? '';
@@ -140,6 +142,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   // Member completion handler
   const handleMemberComplete = async () => {
+    if (isLoading) return;
     const name = formData.name.trim();
     const inviteCode = formData.inviteCode.trim().toUpperCase();
 
@@ -148,6 +151,7 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return;
     }
 
+    setIsLoading(true);
     try {
       // Find household by invitation code
       const household = await getHouseholdByInvitationCode(inviteCode);
@@ -194,6 +198,8 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     } catch (err) {
       setError('Something went wrong. Please try again.');
       console.error('Member join error:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -408,19 +414,19 @@ export function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     autoFocus
                     maxLength={6}
                     returnKeyType="done"
-                    onSubmitEditing={() => canContinue() && handleMemberComplete()}
+                    onSubmitEditing={() => canContinue() && !isLoading && handleMemberComplete()}
                     error={error}
                     style={styles.inviteCodeInput}
                   />
 
                   <Button
                     onPress={handleMemberComplete}
-                    disabled={!canContinue()}
+                    disabled={!canContinue() || isLoading}
                     variant="primary"
                     size="lg"
                     fullWidth
                   >
-                    Join Household
+                    {isLoading ? 'Joining...' : 'Join Household'}
                   </Button>
                 </View>
               </View>

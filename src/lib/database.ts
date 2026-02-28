@@ -4,6 +4,7 @@
 // Version: 3.0.0 - Supabase integration
 // Version: 3.1.0 - Added resetToNewUser() for dev/testing
 // Version: 4.0.0 - Multi-Household Switcher Implementation
+// Version: 4.0.0 - Fetch the user's join date to exclude pre-join notifications from the count
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -793,11 +794,27 @@ export async function addNotification(notification: Omit<Notification, 'id' | 't
 
 export async function getUnreadNotificationsCount(householdId: string, userId: string): Promise<number> {
   try {
-    // Query 1: Get all notification IDs for this household
-    const { data: notifications, error: notificationsError } = await supabase
+    // Fetch the user's join date to exclude pre-join notifications from the count
+    const { data: membership } = await supabase
+      .from('user_households')
+      .select('created_at')
+      .eq('household_id', householdId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const joinDate = membership?.created_at ?? null;
+
+    // Query 1: Get notification IDs for this household, filtered to after the user joined
+    let notifQuery = supabase
       .from('notifications')
       .select('id')
       .eq('household_id', householdId);
+
+    if (joinDate) {
+      notifQuery = notifQuery.gte('created_at', joinDate);
+    }
+
+    const { data: notifications, error: notificationsError } = await notifQuery;
 
     if (notificationsError) {
       console.error('Error fetching notification IDs:', notificationsError.message);
