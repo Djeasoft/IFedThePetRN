@@ -31,7 +31,7 @@ import {
   resendVerificationEmail,
   refreshSession,
 } from '../lib/auth';
-import { createUser } from '../lib/database';
+import { createUser, getUserByEmail, claimInvite } from '../lib/database';
 import { useAuth } from '../contexts/AuthContext';
 
 type AuthStep = 'landing' | 'signup' | 'login' | 'verification' | 'reset-password';
@@ -94,9 +94,31 @@ export function AuthScreen() {
     setLoading(true);
     setError('');
     try {
+      // Check if this email belongs to a pending invitation.
+      // inviteUserByEmail() creates a ghost auth record, so signUpWithEmail()
+      // would throw "User already registered" for invited users.
+      const existingUser = await getUserByEmail(trimmedEmail);
+
+      if (existingUser?.InvitationStatus === 'Pending') {
+        // Invited user — set a password on their ghost auth account, then sign in.
+        // The claim-invite Edge Function handles this server-side using the service role key.
+        console.log('🔑 Invited user detected — claiming invitation for:', trimmedEmail);
+        await claimInvite(trimmedEmail, password);
+        await signInWithEmail(trimmedEmail, password);
+        // AuthContext.onAuthStateChange fires → App.tsx routes to OnboardingFlow automatically.
+        // No need to call setStep('verification') — email is already confirmed by claim-invite.
+        return;
+      }
+
+      if (existingUser?.InvitationStatus === 'Active') {
+        setError('An account with this email already exists. Please use the Login screen.');
+        return;
+      }
+
+      // Normal signup for brand-new users (no existing DB record for this email).
       // Step 1: Create auth user
       const signupData = await signUpWithEmail(trimmedEmail, password);
-      
+
       // Step 2: Create user record in database with auth_user_id
       // Member name will be filled in during onboarding
       if (signupData.user?.id) {
@@ -109,7 +131,7 @@ export function AuthScreen() {
         );
         console.log('✅ User account created in database');
       }
-      
+
       setStep('verification');
     } catch (err: any) {
       setError(err.message || 'Sign up failed. Please try again.');

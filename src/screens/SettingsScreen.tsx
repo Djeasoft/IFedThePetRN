@@ -307,13 +307,19 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       const newUser = await createUser(name, email, false, 'Pending');
       await createUserHousehold(newUser.UserID, household.HouseholdID);
 
-      // Send real invite email via Edge Function
-      const emailSent = await sendInviteEmail(
+      // Send real invite email via Edge Function.
+      // Returns the ghost auth user ID created by inviteUserByEmail() — store it
+      // on the pending user so claim-invite can set their password later.
+      const ghostAuthUserId = await sendInviteEmail(
         email,
         name,
         household.HouseholdName,
         household.InvitationCode
       );
+      if (ghostAuthUserId) {
+        await updateUser(newUser.UserID, { AuthUserID: ghostAuthUserId });
+      }
+      const emailSent = ghostAuthUserId;
 
       // Add notification
       await addNotification({

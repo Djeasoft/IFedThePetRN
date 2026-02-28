@@ -439,6 +439,19 @@ export async function getCurrentHousehold(): Promise<Household | null> {
 
 export async function createUserHousehold(userId: string, householdId: string, receivesReminders: boolean = true): Promise<UserHousehold> {
   try {
+    // Idempotent: return existing link if it already exists (e.g. invited users
+    // who were pre-linked to the household when the admin sent the invite).
+    const { data: existing } = await supabase
+      .from('user_households')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('household_id', householdId)
+      .maybeSingle();
+
+    if (existing) {
+      return mapUserHousehold(existing);
+    }
+
     const { data, error } = await supabase
       .from('user_households')
       .insert([
@@ -697,13 +710,29 @@ const mapNotification = (data: any, isRead: boolean): Notification => ({
 
 export async function getAllNotifications(householdId: string, userId: string): Promise<Notification[]> {
   try {
-    // Query 1: Get all notifications for this household
-    const { data: notifications, error: notifError } = await supabase
+    // Fetch the user's join date for this household to filter out pre-join notifications
+    const { data: membership } = await supabase
+      .from('user_households')
+      .select('created_at')
+      .eq('household_id', householdId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const joinDate = membership?.created_at ?? null;
+
+    // Query 1: Get notifications for this household, filtered to after the user joined
+    let notifQuery = supabase
       .from('notifications')
       .select('*')
       .eq('household_id', householdId)
       .order('created_at', { ascending: false })
       .limit(50);
+
+    if (joinDate) {
+      notifQuery = notifQuery.gte('created_at', joinDate);
+    }
+
+    const { data: notifications, error: notifError } = await notifQuery;
 
     if (notifError) {
       console.error('Error fetching notifications:', notifError.message);
@@ -1442,12 +1471,15 @@ export async function initializeDemoData(): Promise<void> {
 
 // Send household invite email via Supabase Edge Function
 // The Edge Function uses the service role key server-side to call inviteUserByEmail()
+// Returns the ghost auth user ID (string) on success, false on failure.
+// The caller should store this ID on the pending user record via updateUser()
+// so that claim-invite can set a password on it later.
 export async function sendInviteEmail(
   email: string,
   name: string,
   householdName: string,
   invitationCode: string
-): Promise<boolean> {
+): Promise<string | false> {
   try {
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -1469,10 +1501,43 @@ export async function sendInviteEmail(
     }
 
     console.log('📧 Invite email sent successfully to:', email);
-    return true;
+    // result.userId is the ghost auth user ID created by inviteUserByEmail()
+    return result.userId || false;
   } catch (error) {
     console.error('📧 Invite email error:', error);
     return false;
+  }
+}
+
+// Calls the claim-invite Edge Function to set a password on the ghost auth user
+// that was created when the admin sent the invite. After this succeeds, the
+// invited user can call signInWithEmail() with their chosen password.
+export async function claimInvite(email: string, password: string): Promise<boolean> {
+  try {
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/claim-invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error('📧 Claim invite failed:', result.error);
+      throw new Error(result.error || 'Failed to claim invitation');
+    }
+
+    console.log('📧 Invite claimed successfully for:', email);
+    return true;
+  } catch (error) {
+    console.error('📧 Claim invite error:', error);
+    throw error;
   }
 }
 
