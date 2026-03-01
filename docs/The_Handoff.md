@@ -70,7 +70,7 @@ What is **not** working:
 | 9 | Invite email link leads to blank page | 🟡 Minor | Deep linking not implemented — expected. Fix in Phase B before production build |
 | 10 | ~~Create new user after invite fails~~ | ✅ Fixed | `claim-invite` Edge Function. `AuthScreen.handleSignUp` detects pending user and claims ghost auth account. `createUserHousehold` made idempotent. |
 | 11 | Invited user takes "Create Household" path instead of "Join" | 🟠 Medium | Invited user ends up with a spurious extra household. Onboarding needs a UX guard to detect pending invited users and steer them to the Join path. Needs brainstorm before code. |
-
+| 12 | main member invite, remove name from modal | 🔴 Major |  |
 ---
 
 ## 3. IMPROVEMENTS
