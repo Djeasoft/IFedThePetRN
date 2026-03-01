@@ -72,6 +72,7 @@ What is **not** working:
 | 10 | ~~Create new user after invite fails~~ | ✅ Fixed | `claim-invite` Edge Function. `AuthScreen.handleSignUp` detects pending user and claims ghost auth account. `createUserHousehold` made idempotent. |
 | 11 | Invited user takes "Create Household" path instead of "Join" | 🟠 Medium | Invited user ends up with a spurious extra household. Onboarding needs a UX guard to detect pending invited users and steer them to the Join path. Needs brainstorm before code. |
 | 12 | main member invite, remove name from modal | 🔴 Major | When the main member invites a new member there is a name field on the modal, remove it |
+| 13 | New pet not appearing in StatusScreen checkboxes after being added in Settings | 🟠 Medium | When main member adds a new pet in Settings, StatusScreen pet checkbox section does not update on return. Likely related to suppressNextRealtimeLoad ref suppressing the Supabase broadcast. Needs investigation. |
 
 ---
 
