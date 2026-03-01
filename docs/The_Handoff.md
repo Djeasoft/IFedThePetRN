@@ -86,6 +86,11 @@ What is **not** working:
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
 | I8 | cant change email address on settings, so delete user rather |
 | I9 | t&c  | 🟡 Minor | add it back
+| I10 | household name not updateing | 🟡 Minor | when updating house name it settings is boes not update statusscreen |
+| I11 | logo size  | 🟡 Minor | increase logo size on status acreen back |
+
+
+
 ---
 
 ## 4. WHAT'S NEXT?
