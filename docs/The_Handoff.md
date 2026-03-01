@@ -88,7 +88,7 @@ What is **not** working:
 | I9 | t&c  | 🟡 Minor | add it back
 | I10 | household name not updateing | 🟡 Minor | when updating house name it settings is boes not update statusscreen |
 | I11 | logo size  | 🟡 Minor | increase logo size on status acreen back |
-
+| I12 | sitter adding household  | 🟡 medium | add household button to household island, sa the pet sitter can add it |
 
 
 ---
