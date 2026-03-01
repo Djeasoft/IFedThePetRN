@@ -77,10 +77,10 @@ What is **not** working:
 
 | # | Improvement | Severity | Notes |
 |---|-------------|----------|-------|
-| I1 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
+| I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
 | I2 | Progress spinner on Invite Member modal | 🟠 Medium | Visible delay while invite email sends — no loading indicator. Add spinner over modal during `sendInviteEmail` call. |
 | I3 | Move Invitation Code into Household card | 🟡 Minor | On Settings screen, invitation code sits outside the household container. Move it inside. |
-| I4 | Pet names not horizontally aligned on StatusScreen | 🟡 Minor | Pet name text alignment inconsistent across cards. |
+| I1 | Pet names not horizontally aligned on StatusScreen | 🔴 Major | Pet name text alignment inconsistent across cards. |
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
