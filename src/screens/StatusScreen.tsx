@@ -11,6 +11,7 @@
 // Version: 3.7.0 - Fix: merge household + notification subscriptions into one useEffect (same [activeHouseholdId] dep)
 //                  so the notification subscription is never torn down by loadData() re-renders, ensuring
 //                  feed_request and other standalone notifications also update the bell badge in real-time
+// test 
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
