@@ -84,7 +84,7 @@ What is **not** working:
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
-
+|I8 | cant change email address on settings, so delete user rather |
 ---
 
 ## 4. WHAT'S NEXT?
