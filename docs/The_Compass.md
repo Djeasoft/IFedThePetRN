@@ -250,6 +250,12 @@
 * **Files changed**: `database.ts` (`getAllNotifications`, `getUnreadNotificationsCount`), `OnboardingFlow.tsx` (isLoading guard).
 * **Verified**: Fresh user joined household with existing notification history. Bell badge showed 0. Panel matched badge. Only one `member_joined` entry in database. Tested on device by Jarques, 28 February 2026.
 
+**1 March 2026**
+* **Milestone:** Improvements backlog begun — I1 resolved.
+* **Problem:** Pet checkboxes on StatusScreen were rendering in a vertical column instead of a horizontal row, making the UI inconsistent with the intended design.
+* **Action:** Wrapped individual pet checkbox items in a `petCheckboxRow` container with `flexDirection: 'row'` and `flexWrap: 'wrap'`. Added `checkboxRowInline` style for individual pet items. `StatusScreen.tsx` bumped to v3.8.0.
+* **Files changed**: `StatusScreen.tsx`
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions

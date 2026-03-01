@@ -11,7 +11,7 @@
 // Version: 3.7.0 - Fix: merge household + notification subscriptions into one useEffect (same [activeHouseholdId] dep)
 //                  so the notification subscription is never torn down by loadData() re-renders, ensuring
 //                  feed_request and other standalone notifications also update the bell badge in real-time
-// test 
+// Version: 3.8.0 - Fix: pet checkboxes render in horizontal row with flexWrap (I1)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -701,7 +701,7 @@ export function StyledStatusScreen({
         {/* Pet Checkboxes (Pro only, multiple pets) */}
         {isPro && pets.length > 1 && (
           <View style={[styles.petCheckboxContainer, { backgroundColor: theme.surface }]}>
-            {/* Feed All checkbox */}
+            {/* Feed All checkbox — full width row */}
             <TouchableOpacity
               onPress={handleFeedAllToggle}
               style={styles.checkboxRow}
@@ -717,29 +717,32 @@ export function StyledStatusScreen({
               <Text style={[styles.checkboxLabel, { color: theme.text }]}>Feed all</Text>
             </TouchableOpacity>
 
-            {/* Individual pet checkboxes */}
-            {pets.map((pet) => (
-              <TouchableOpacity
-                key={pet.PetID}
-                onPress={() => handlePetToggle(pet.PetID)}
-                style={styles.checkboxRow}
-                activeOpacity={0.7}
-              >
-                <View style={[
-                  styles.checkbox,
-                  { borderColor: theme.border },
-                  !feedAllSelected && selectedPetIds.includes(pet.PetID) && {
-                    backgroundColor: theme.primary,
-                    borderColor: theme.primary
-                  }
-                ]}>
-                  {!feedAllSelected && selectedPetIds.includes(pet.PetID) && (
-                    <Ionicons name="checkmark" size={16} color="white" />
-                  )}
-                </View>
-                <Text style={[styles.checkboxLabel, { color: theme.text }]}>{pet.PetName}</Text>
-              </TouchableOpacity>
-            ))}
+            {/* Individual pet checkboxes — horizontal row with wrap */}
+            {/* FIX v3.8.0: Wrapped in petCheckboxRow (flexDirection: row, flexWrap: wrap) */}
+            <View style={styles.petCheckboxRow}>
+              {pets.map((pet) => (
+                <TouchableOpacity
+                  key={pet.PetID}
+                  onPress={() => handlePetToggle(pet.PetID)}
+                  style={styles.checkboxRowInline}
+                  activeOpacity={0.7}
+                >
+                  <View style={[
+                    styles.checkbox,
+                    { borderColor: theme.border },
+                    !feedAllSelected && selectedPetIds.includes(pet.PetID) && {
+                      backgroundColor: theme.primary,
+                      borderColor: theme.primary
+                    }
+                  ]}>
+                    {!feedAllSelected && selectedPetIds.includes(pet.PetID) && (
+                      <Ionicons name="checkmark" size={16} color="white" />
+                    )}
+                  </View>
+                  <Text style={[styles.checkboxLabel, { color: theme.text }]}>{pet.PetName}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
 
@@ -1065,10 +1068,25 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
   },
+  // Full-width row for "Feed all"
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
+  },
+  // FIX v3.8.0: Horizontal wrapping row for individual pet checkboxes
+  petCheckboxRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  // FIX v3.8.0: Inline style for each individual pet checkbox item
+  checkboxRowInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginRight: 16,
   },
   checkbox: {
     width: 20,

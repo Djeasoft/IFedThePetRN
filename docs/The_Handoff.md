@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Saturday, 28 February 2026, 11:00am GMT
+**Last Updated:** Sunday, 1 March 2026, 12:25pm GMT
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — Item 7 (Plan Phase B). Bug backlog is clear. Improvements backlog is the priority before Phase B begins.
+**Next Session:** Pick up from WHAT'S NEXT — Improvements backlog. I2 and I6 are highest severity.
 
 ---
 
@@ -47,6 +47,7 @@ What is verified and working:
 - New members only see notifications from after their join date ✅ *(fixed 28 Feb)*
 - Bell badge count matches NotificationsPanel count for new members ✅ *(fixed 28 Feb)*
 - Duplicate member_joined notifications eliminated via loading guard ✅ *(fixed 28 Feb)*
+- Pet checkboxes render in horizontal row on StatusScreen ✅ *(fixed 1 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -70,17 +71,18 @@ What is **not** working:
 | 9 | Invite email link leads to blank page | 🟡 Minor | Deep linking not implemented — expected. Fix in Phase B before production build |
 | 10 | ~~Create new user after invite fails~~ | ✅ Fixed | `claim-invite` Edge Function. `AuthScreen.handleSignUp` detects pending user and claims ghost auth account. `createUserHousehold` made idempotent. |
 | 11 | Invited user takes "Create Household" path instead of "Join" | 🟠 Medium | Invited user ends up with a spurious extra household. Onboarding needs a UX guard to detect pending invited users and steer them to the Join path. Needs brainstorm before code. |
-| 12 | main member invite, remove name from modal | 🔴 Major |  |
+| 12 | main member invite, remove name from modal | 🔴 Major | When the main member invites a new member there is a name field on the modal, remove it |
+
 ---
 
 ## 3. IMPROVEMENTS
 
 | # | Improvement | Severity | Notes |
 |---|-------------|----------|-------|
-| I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
+| I1 | ~~Pet checkboxes rendering in vertical column instead of horizontal row~~ | ✅ Fixed | `petCheckboxRow` wrapper with `flexDirection: row` and `flexWrap: wrap`. `checkboxRowInline` style added for individual pet items. `StatusScreen.tsx` v3.8.0 |
 | I2 | Progress spinner on Invite Member modal | 🟠 Medium | Visible delay while invite email sends — no loading indicator. Add spinner over modal during `sendInviteEmail` call. |
 | I3 | Move Invitation Code into Household card | 🟡 Minor | On Settings screen, invitation code sits outside the household container. Move it inside. |
-| I1 | Pet names not horizontally aligned on StatusScreen | 🔴 Major | Pet name text alignment inconsistent across cards. |
+| I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
@@ -88,8 +90,8 @@ What is **not** working:
 | I9 | t&c  | 🟡 Minor | add it back
 | I10 | household name not updateing | 🟡 Minor | when updating house name it settings is boes not update statusscreen |
 | I11 | logo size  | 🟡 Minor | increase logo size on status acreen back |
-| I12 | sitter adding household  | 🟡 medium | add household button to household island, sa the pet sitter can add it |
-
+| I12 | Adding a new household  | 🟡 medium | Add household button to household island, for example if a pet sitter want to add Newman house and she already has an account she can add the invitation code |
+| I13 | Notifications 30 days  | 🟡 medium | All notification should be deleted from the database after a month |
 
 ---
 
@@ -105,6 +107,7 @@ What is **not** working:
 - [x] **6.** Fix stale notification inheritance for new members
 - [x] **8.** Wire up email invitations
 - [x] **10.** Fix invited user signup error
+- [x] **I1.** Pet checkboxes horizontal row
 - [ ] **Next:** Work through Improvements backlog (I2 and I6 are highest severity)
 - [ ] **Bug 11:** Onboarding guard for invited users who take "Create Household" path
 - [ ] **Phase B:** Apple/Google OAuth, React Navigation, component extraction, production build prep
@@ -159,7 +162,7 @@ What is **not** working:
 
 **Current file versions:**
 - `App.tsx` v3.8.0
-- `StatusScreen.tsx` v3.7.0
+- `StatusScreen.tsx` v3.8.0 (pet checkboxes horizontal row fix)
 - `SettingsScreen.tsx` v3.6.0 (stores ghost auth ID after invite send)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0 (invited user claim flow in handleSignUp)
