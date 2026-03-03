@@ -11,6 +11,7 @@
 // Version: 3.7.0 - I2: Loading spinner on Send Invite button; Bug 12: Remove name field from invite modal
 // Version: 3.7.1 - Remove spurious member_joined notification on invite send
 // Version: 3.7.2 - Sort members: main member first, then active, then pending
+// Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser`
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -264,12 +265,22 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
     if (!editingMemberId || !memberNameInput.trim()) return;
 
     try {
+      
+      // UPDATE DATABASE 
       await updateUser(editingMemberId, { MemberName: memberNameInput.trim() });
+      
+      // Keep Account section in sync when user edits their own name
+      if (editingMemberId === currentUser?.UserID) {
+        setCurrentUser((prev) => prev ? { ...prev, MemberName: memberNameInput.trim() } : prev);
+      }
+      
+      // Keep Members section in sync when user edits their own name
       setMembers((prev) =>
         prev.map((m) =>
           m.UserID === editingMemberId ? { ...m, MemberName: memberNameInput.trim() } : m
         )
       );
+
       setEditingMemberId(null);
     } catch (error) {
       Alert.alert('Error', 'Failed to update member name');
@@ -300,6 +311,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       return;
     }
 
+    setIsSendingInvite(true);
+
     // Check member limit
     const canAdd = await canAddMember(household.HouseholdID);
     if (!canAdd) {
@@ -310,7 +323,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       return;
     }
 
-    setIsSendingInvite(true);
     try {
       suppressNextRealtimeLoad.current = true;
       // Create pending user — name derived from email prefix as placeholder
@@ -758,15 +770,52 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
               {/* Account Section */}
               <SectionHeader title="Account" />
               <View style={[styles.card, { backgroundColor: theme.surface }]}>
-                {/* Current user identity — useful when testing across multiple accounts */}
-                <View style={styles.accountIdentityRow}>
-                  <Text style={[styles.accountName, { color: theme.text }]}>
-                    {currentUser?.MemberName ?? '—'}
-                  </Text>
-                  <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>
-                    {currentUser?.EmailAddress ?? '—'}
-                  </Text>
-                </View>
+                {editingMemberId === currentUser?.UserID ? (
+                  <View style={styles.editRow}>
+                    <TextInput
+                      style={[
+                        styles.editInput,
+                        { color: theme.text, borderColor: theme.border },
+                      ]}
+                      value={memberNameInput}
+                      onChangeText={setMemberNameInput}
+                      autoFocus
+                      onSubmitEditing={handleSaveMemberName}
+                    />
+                    <TouchableOpacity
+                      onPress={handleSaveMemberName}
+                      style={[styles.saveButton, { backgroundColor: theme.primary }]}
+                    >
+                      <Text style={styles.saveButtonText}>Save</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setEditingMemberId(null)}
+                      style={styles.cancelButton}
+                    >
+                      <Ionicons name="close" size={20} color={theme.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.accountIdentityRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={[styles.accountName, { color: theme.text }]}>
+                        {currentUser?.MemberName ?? '—'}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setEditingMemberId(currentUser?.UserID ?? null);
+                          setMemberNameInput(currentUser?.MemberName ?? '');
+                        }}
+                        style={styles.memberActionButton}
+                      >
+                        <Ionicons name="pencil" size={18} color={theme.textSecondary} />
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.accountEmail, { color: theme.textSecondary }]}>
+                      {currentUser?.EmailAddress ?? '—'}
+                    </Text>
+                  </View>
+                )}
                 <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <SettingsRow
                   label="Sign Out"
@@ -859,167 +908,132 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     {index > 0 && (
                       <View style={[styles.divider, { backgroundColor: theme.border }]} />
                     )}
-                    {editingMemberId === member.UserID ? (
-                      <View style={styles.editRow}>
-                        <TextInput
-                          style={[
-                            styles.editInput,
-                            { color: theme.text, borderColor: theme.border },
-                          ]}
-                          value={memberNameInput}
-                          onChangeText={setMemberNameInput}
-                          autoFocus
-                          onSubmitEditing={handleSaveMemberName}
-                        />
-                        <TouchableOpacity
-                          onPress={handleSaveMemberName}
-                          style={[styles.saveButton, { backgroundColor: theme.primary }]}
-                        >
-                          <Text style={styles.saveButtonText}>Save</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => setEditingMemberId(null)}
-                          style={styles.cancelButton}
-                        >
-                          <Ionicons name="close" size={20} color={theme.textSecondary} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.memberContainer}>
-                        <View style={styles.memberRow}>
-                          <View style={styles.memberInfo}>
-                            <View style={styles.memberNameRow}>
-                              <Text style={[styles.memberName, { color: theme.text }]}>
-                                {member.MemberName}
-                              </Text>
-                              {member.IsMainMember && (
-                                <View
-                                  style={[
-                                    styles.adminBadge,
-                                    { backgroundColor: theme.primaryLight },
-                                  ]}
-                                >
-                                  <Text style={styles.adminBadgeText}>Admin</Text>
-                                </View>
-                              )}
-                              {member.InvitationStatus === 'Pending' && (
-                                <View
-                                  style={[
-                                    styles.pendingBadge,
-                                    { backgroundColor: theme.warning },
-                                  ]}
-                                >
-                                  <Text style={styles.pendingBadgeText}>Pending</Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text
-                              style={[styles.memberEmail, { color: theme.textSecondary }]}
-                            >
-                              {member.EmailAddress}
-                            </Text>
-                          </View>
-                          {isMainMember && !member.IsMainMember && (
-                            <View style={styles.memberActions}>
-                              <TouchableOpacity
-                                onPress={() => {
-                                  setEditingMemberId(member.UserID);
-                                  setMemberNameInput(member.MemberName);
-                                }}
-                                style={styles.memberActionButton}
-                              >
-                                <Ionicons
-                                  name="pencil"
-                                  size={18}
-                                  color={theme.textSecondary}
-                                />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleRemoveMember(member)}
-                                style={styles.memberActionButton}
-                              >
-                                <Ionicons name="trash" size={18} color={theme.error} />
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </View>
 
-                        {/* "Ask to feed" button - only for other members */}
-                        {currentUser && member.UserID !== currentUser.UserID && (
-                          <View style={styles.feedRequestContainer}>
-                            <TouchableOpacity
-                              style={[
-                                styles.feedRequestButton,
-                                { backgroundColor: isPro ? theme.primary : theme.border },
-                              ]}
-                              disabled={!isPro}
-                              onPress={async () => {
-                                try {
-                                  // Suppress bell on sender's device
-                                  if (suppressNotificationSoundRef) {
-                                    suppressNotificationSoundRef.current = true;
-                                  }
-                                  await addNotification({
-                                    householdId: household!.HouseholdID,
-                                    type: 'feed_request',
-                                    message: `${currentUser!.MemberName} asked ${member.MemberName} to feed the pet(s)`,
-                                    memberName: member.MemberName,
-                                    requestedBy: currentUser!.MemberName,
-                                  });
-                                  Alert.alert(
-                                    'Request Sent',
-                                    `Asked ${member.MemberName} to feed the pet(s)!`
-                                  );
-                                } catch (error) {
-                                  console.error('Error sending feed request:', error);
-                                  if (suppressNotificationSoundRef) {
-                                    suppressNotificationSoundRef.current = false;
-                                  }
-                                  Alert.alert('Error', 'Failed to send feed request. Please try again.');
-                                }
-                              }}
-                              activeOpacity={0.8}
-                            >
-                              <Text
+                    <View style={styles.memberContainer}>
+                      <View style={styles.memberRow}>
+                        <View style={styles.memberInfo}>
+                          <View style={styles.memberNameRow}>
+                            <Text style={[styles.memberName, { color: theme.text }]}>
+                              {member.MemberName}
+                            </Text>
+                            {member.IsMainMember && (
+                              <View
                                 style={[
-                                  styles.feedRequestButtonText,
-                                  !isPro && { opacity: 0.5 },
+                                  styles.adminBadge,
+                                  { backgroundColor: theme.primaryLight },
                                 ]}
                               >
-                                Ask {member.MemberName} to feed the pet(s)
-                              </Text>
-                            </TouchableOpacity>
-
-                            {/* Upgrade message for Free tier */}
-                            {!isPro && (
-                              <Text style={[styles.feedRequestUpgradeText, { color: theme.textSecondary }]}>
-                                <Text style={[styles.feedRequestUpgradeLink, { color: theme.textSecondary }]}>
-                                  Upgrade to Pro
-                                </Text>
-                                {' '}to notify a member to feed the pet(s).
-                              </Text>
+                                <Text style={styles.adminBadgeText}>Admin</Text>
+                              </View>
                             )}
+                            {member.InvitationStatus === 'Pending' && (
+                              <View
+                                style={[
+                                  styles.pendingBadge,
+                                  { backgroundColor: theme.warning },
+                                ]}
+                              >
+                                <Text style={styles.pendingBadgeText}>Pending</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            style={[styles.memberEmail, { color: theme.textSecondary }]}
+                          >
+                            {member.EmailAddress}
+                          </Text>
+                        </View>
+                        {isMainMember && !member.IsMainMember && (
+                          <View style={styles.memberActions}>
+                            <TouchableOpacity
+                              onPress={() => handleRemoveMember(member)}
+                              style={styles.memberActionButton}
+                            >
+                              <Ionicons name="trash" size={18} color={theme.error} />
+                            </TouchableOpacity>
                           </View>
                         )}
                       </View>
-                    )}
+
+                      {/* "Ask to feed" button - only for other members */}
+                      {currentUser && member.UserID !== currentUser.UserID && (
+                        <View style={styles.feedRequestContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.feedRequestButton,
+                              { backgroundColor: isPro ? theme.primary : theme.border },
+                            ]}
+                            disabled={!isPro}
+                            onPress={async () => {
+                              try {
+                                // Suppress bell on sender's device
+                                if (suppressNotificationSoundRef) {
+                                  suppressNotificationSoundRef.current = true;
+                                }
+                                await addNotification({
+                                  householdId: household!.HouseholdID,
+                                  type: 'feed_request',
+                                  message: `${currentUser!.MemberName} asked ${member.MemberName} to feed the pet(s)`,
+                                  memberName: member.MemberName,
+                                  requestedBy: currentUser!.MemberName,
+                                });
+                                Alert.alert(
+                                  'Request Sent',
+                                  `Asked ${member.MemberName} to feed the pet(s)!`
+                                );
+                              } catch (error) {
+                                console.error('Error sending feed request:', error);
+                                if (suppressNotificationSoundRef) {
+                                  suppressNotificationSoundRef.current = false;
+                                }
+                                Alert.alert('Error', 'Failed to send feed request. Please try again.');
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.feedRequestButtonText,
+                                !isPro && { opacity: 0.5 },
+                              ]}
+                            >
+                              Ask {member.MemberName} to feed the pet(s)
+                            </Text>
+                          </TouchableOpacity>
+
+                          {/* Upgrade message for Free tier */}
+                          {!isPro && (
+                            <Text style={[styles.feedRequestUpgradeText, { color: theme.textSecondary }]}>
+                              <Text style={[styles.feedRequestUpgradeLink, { color: theme.textSecondary }]}>
+                                Upgrade to Pro
+                              </Text>
+                              {' '}to notify a member to feed the pet(s).
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+
                   </React.Fragment>
                 ))}
-              </View>
 
-              {/* Invite Member Button */}
-              {isMainMember && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: theme.surface }]}
-                  onPress={() => setShowInviteModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="person-add" size={20} color={theme.primary} />
-                  <Text style={[styles.actionButtonText, { color: theme.primary }]}>
-                    Invite Member
-                  </Text>
-                </TouchableOpacity>
-              )}
+                {/* Invite Member Button */}
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                {isMainMember && (
+
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: theme.surface }]}
+                    onPress={() => setShowInviteModal(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="person-add" size={20} color={theme.primary} />
+                    <Text style={[styles.actionButtonText, { color: theme.primary }]}>
+                      Invite Member
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+              </View>
 
               {/* Free tier member limit message */}
               {!isPro && memberCount >= TIER_LIMITS.FREE.membersPerHousehold && (
@@ -1910,7 +1924,6 @@ const styles = StyleSheet.create({
   // Divider
   divider: {
     height: 1,
-    marginLeft: spacing.base,
   },
 
   // Edit row
