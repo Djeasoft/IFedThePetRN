@@ -5,6 +5,7 @@
 // Version: 3.1.0 - Added resetToNewUser() for dev/testing
 // Version: 4.0.0 - Multi-Household Switcher Implementation
 // Version: 4.0.0 - Fetch the user's join date to exclude pre-join notifications from the count
+// Version: 4.1.0 - Sort members: main member first, then active by Creation Date
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1399,7 +1400,9 @@ export async function getMembersOfHousehold(householdId: string): Promise<User[]
     const { data: users, error: userError } = await supabase
       .from('users')
       .select('*')
-      .in('id', userIds);
+      .in('id', userIds)
+      .order('created_at', { ascending: true })
+      ;
 
     if (userError || !users) return [];
 

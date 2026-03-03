@@ -7,6 +7,10 @@
 // Version: 3.3.0 - Wire up "Ask member to feed" — real Supabase notification insert replaces Alert.alert stub
 // Version: 3.4.0 - Add suppressNotificationSoundRef prop to suppress bell sound on sender's device
 // Version: 3.5.0 - Wire up real invite email via Supabase Edge Function (send-invite-email)
+// Version: 3.6.0 - Store ghost auth ID after invite send (claim-invite flow)
+// Version: 3.7.0 - I2: Loading spinner on Send Invite button; Bug 12: Remove name field from invite modal
+// Version: 3.7.1 - Remove spurious member_joined notification on invite send
+// Version: 3.7.2 - Sort members: main member first, then active, then pending
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -99,8 +103,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
 
   // Invite member modal
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
 
   // Add pet modal
   const [showAddPetModal, setShowAddPetModal] = useState(false);
@@ -121,6 +125,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
 
   // Real-time suppression ref
   const suppressNextRealtimeLoad = useRef(false);
+
+  // Sort members: main member first, then active, then pending
+  const sortMembers = (list: User[]) => [...list].sort((a, b) => {
+    const rank = (m: User) => m.IsMainMember ? 0 : m.InvitationStatus === 'Active' ? 1 : 2;
+    return rank(a) - rank(b);
+  });
 
   // Computed values
   const isMainMember = currentUser?.IsMainMember ?? false;
@@ -144,7 +154,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           if (cached.household) {
             setHouseholdNameInput(cached.household.HouseholdName);
           }
-          setMembers(cached.members);
+          setMembers(sortMembers(cached.members));
           setPets(cached.pets);
           setFeedingNotifications(cached.feedingNotifications);
           setMemberJoinedNotifications(cached.memberJoinedNotifications);
@@ -192,7 +202,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           getPetsByHouseholdId(hh.HouseholdID)
         ]);
 
-        setMembers(householdMembers);
+        setMembers(sortMembers(householdMembers));
         setPets(householdPets);
 
         // Step 3: Write fresh data to cache
@@ -279,9 +289,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
   };
 
   const handleInviteMember = async () => {
-    if (!household || !inviteName.trim() || !inviteEmail.trim()) return;
+    if (!household || !inviteEmail.trim() || isSendingInvite) return;
 
-    const name = inviteName.trim();
     const email = inviteEmail.trim().toLowerCase();
 
     // Basic email validation
@@ -301,10 +310,12 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       return;
     }
 
+    setIsSendingInvite(true);
     try {
       suppressNextRealtimeLoad.current = true;
-      // Create pending user with the provided name
-      const newUser = await createUser(name, email, false, 'Pending');
+      // Create pending user — name derived from email prefix as placeholder
+      const namePlaceholder = email.split('@')[0];
+      const newUser = await createUser(namePlaceholder, email, false, 'Pending');
       await createUserHousehold(newUser.UserID, household.HouseholdID);
 
       // Send real invite email via Edge Function.
@@ -312,7 +323,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       // on the pending user so claim-invite can set their password later.
       const ghostAuthUserId = await sendInviteEmail(
         email,
-        name,
+        namePlaceholder,
         household.HouseholdName,
         household.InvitationCode
       );
@@ -321,26 +332,19 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       }
       const emailSent = ghostAuthUserId;
 
-      // Add notification
-      await addNotification({
-        householdId: household.HouseholdID,
-        type: 'member_joined',
-        message: `Invitation sent to ${name}`,
-        memberName: name,
-      });
-
       setShowInviteModal(false);
-      setInviteName('');
       setInviteEmail('');
       loadData();
 
       if (emailSent) {
         Alert.alert('Invitation Sent', `An email has been sent to ${email} with instructions to join ${household.HouseholdName}.`);
       } else {
-        Alert.alert('Member Added', `${name} was added but the invite email could not be sent. Share the invitation code manually: ${household.InvitationCode}`);
+        Alert.alert('Member Added', `${email} was added but the invite email could not be sent. Share the invitation code manually: ${household.InvitationCode}`);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to send invitation');
+    } finally {
+      setIsSendingInvite(false);
     }
   };
 
@@ -596,7 +600,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       // Update household state
       setHousehold(newHousehold);
       setHouseholdNameInput(newHousehold.HouseholdName);
-      setMembers(members);
+      setMembers(sortMembers(members));
 
       // Reload pets for new household
       const householdPets = await getPetsByHouseholdId(newHousehold.HouseholdID);
@@ -1585,7 +1589,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           visible={showInviteModal}
           animationType="fade"
           transparent
-          onRequestClose={() => setShowInviteModal(false)}
+          onRequestClose={() => !isSendingInvite && setShowInviteModal(false)}
         >
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
@@ -1596,34 +1600,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
+                    if (isSendingInvite) return;
                     setShowInviteModal(false);
-                    setInviteName('');
                     setInviteEmail('');
                   }}
                   style={styles.modalCloseButton}
+                  disabled={isSendingInvite}
                 >
                   <Ionicons name="close" size={24} color={theme.textSecondary} />
                 </TouchableOpacity>
-              </View>
-
-              {/* First name field */}
-              <View style={styles.modalInputGroup}>
-                <Text style={[styles.modalInputLabel, { color: theme.textSecondary }]}>
-                  First name
-                </Text>
-                <TextInput
-                  style={[
-                    styles.modalInput,
-                    { color: theme.text, borderColor: theme.border, backgroundColor: theme.background },
-                  ]}
-                  value={inviteName}
-                  onChangeText={setInviteName}
-                  placeholder="Member's name"
-                  placeholderTextColor={theme.textTertiary}
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  autoFocus
-                />
               </View>
 
               {/* Email address field */}
@@ -1643,6 +1628,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
+                  autoFocus
+                  editable={!isSendingInvite}
                 />
               </View>
 
@@ -1653,13 +1640,14 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     styles.modalButton,
                     styles.modalCancelButton,
                     { backgroundColor: theme.border },
+                    isSendingInvite && { opacity: 0.4 },
                   ]}
                   onPress={() => {
                     setShowInviteModal(false);
-                    setInviteName('');
                     setInviteEmail('');
                   }}
                   activeOpacity={0.8}
+                  disabled={isSendingInvite}
                 >
                   <Text style={[styles.modalButtonText, { color: theme.text }]}>
                     Cancel
@@ -1670,15 +1658,19 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     styles.modalButton,
                     styles.modalSendButton,
                     { backgroundColor: theme.primary },
-                    (!inviteName.trim() || !inviteEmail.trim()) && { opacity: 0.5 },
+                    (!inviteEmail.trim() || isSendingInvite) && { opacity: 0.5 },
                   ]}
                   onPress={handleInviteMember}
-                  disabled={!inviteName.trim() || !inviteEmail.trim()}
+                  disabled={!inviteEmail.trim() || isSendingInvite}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.modalButtonText, { color: 'white' }]}>
-                    Send Invite
-                  </Text>
+                  {isSendingInvite ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={[styles.modalButtonText, { color: 'white' }]}>
+                      Send Invite
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
