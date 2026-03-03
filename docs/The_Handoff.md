@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Sunday, 1 March 2026, 12:25pm GMT
+**Last Updated:** Tuesday, 3 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — Improvements backlog. I2 and I6 are highest severity.
+**Next Session:** Pick up from WHAT'S NEXT — I6 (Android safe area) is highest priority remaining improvement.
 
 ---
 
@@ -48,6 +48,13 @@ What is verified and working:
 - Bell badge count matches NotificationsPanel count for new members ✅ *(fixed 28 Feb)*
 - Duplicate member_joined notifications eliminated via loading guard ✅ *(fixed 28 Feb)*
 - Pet checkboxes render in horizontal row on StatusScreen ✅ *(fixed 1 Mar)*
+- Invite modal: name field removed, spinner on Send Invite, `isSendingInvite` guard before `canAddMember` ✅ *(fixed 3 Mar)*
+- Spurious invite notification removed — no notification fired on invite send ✅ *(fixed 3 Mar)*
+- Members sorted: main member first, then active, then pending (oldest joined first within tier) ✅ *(fixed 3 Mar)*
+- Account section: pencil icon lets logged-in user rename themselves inline ✅ *(fixed 3 Mar)*
+- Members section: pencil removed — admin can no longer rename other members ✅ *(fixed 3 Mar)*
+- `handleSaveMemberName` updates `members` and `currentUser` state instantly on save ✅ *(fixed 3 Mar)*
+- Member removal works: RLS policy fixed, member disappears from view instantly ✅ *(fixed 3 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -71,29 +78,31 @@ What is **not** working:
 | 9 | Invite email link leads to blank page | 🟡 Minor | Deep linking not implemented — expected. Fix in Phase B before production build |
 | 10 | ~~Create new user after invite fails~~ | ✅ Fixed | `claim-invite` Edge Function. `AuthScreen.handleSignUp` detects pending user and claims ghost auth account. `createUserHousehold` made idempotent. |
 | 11 | Invited user takes "Create Household" path instead of "Join" | 🟠 Medium | Invited user ends up with a spurious extra household. Onboarding needs a UX guard to detect pending invited users and steer them to the Join path. Needs brainstorm before code. |
-| 12 | main member invite, remove name from modal | 🔴 Major | When the main member invites a new member there is a name field on the modal, remove it |
+| 12 | ~~Invite modal had name field~~ | ✅ Fixed | Name field removed. Email only. Placeholder from email prefix. `SettingsScreen.tsx` v3.7.0 |
 | 13 | New pet not appearing in StatusScreen checkboxes after being added in Settings | 🟠 Medium | When main member adds a new pet in Settings, StatusScreen pet checkbox section does not update on return. Likely related to suppressNextRealtimeLoad ref suppressing the Supabase broadcast. Needs investigation. |
 | 14 | Real-time Sync Failure on Android Client | 🔴 Major | The Android app fails to reflect state changes made by other devices in real-time. In the test, iOS devices updated to "20:24" immediately, while the Android device remained stuck at "20:18." Indicates a potential issue with the WebSocket listener or background polling on the Android build. |
-
+| 15 | ~~Rename Account/Member name~~ | ✅ Fixed | Pencil in Account section. `handleSaveMemberName` updates `currentUser` immediately. `SettingsScreen.tsx` v3.7.3 |
+| 16 | ~~Remove Edit Pencil in members section~~ | ✅ Fixed | Pencil removed from all member rows. Admin no longer renames other members. `SettingsScreen.tsx` v3.7.3 |
+| 17 | ~~Unable to Delete User~~ | ✅ Fixed | `suppressNextRealtimeLoad` removed from `handleRemoveMember`. RLS DELETE policy added to `user_households` — main member can remove others. Optimistic state update removes member from view instantly. |
 ---
 
-## 3. IMPROVEMENTS
+## 3. ENHANCEMENTS & IMPROVEMENTS
 
 | # | Improvement | Severity | Notes |
 |---|-------------|----------|-------|
 | I1 | ~~Pet checkboxes rendering in vertical column instead of horizontal row~~ | ✅ Fixed | `petCheckboxRow` wrapper with `flexDirection: row` and `flexWrap: wrap`. `checkboxRowInline` style added for individual pet items. `StatusScreen.tsx` v3.8.0 |
-| I2 | Progress spinner on Invite Member modal | 🟠 Medium | Visible delay while invite email sends — no loading indicator. Add spinner over modal during `sendInviteEmail` call. |
+| I2 | ~~Progress spinner on Invite Member modal~~ | ✅ Fixed | `isSendingInvite` guard before `canAddMember` for instant spinner. All controls disabled during send. `SettingsScreen.tsx` v3.7.0 |
 | I3 | Move Invitation Code into Household card | 🟡 Minor | On Settings screen, invitation code sits outside the household container. Move it inside. |
 | I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
-| I8 | cant change email address on settings, so delete user rather |
-| I9 | t&c  | 🟡 Minor | add it back
-| I10 | household name not updateing | 🟡 Minor | when updating house name it settings is boes not update statusscreen |
-| I11 | logo size  | 🟡 Minor | increase logo size on status acreen back |
-| I12 | Adding a new household  | 🟡 medium | Add household button to household island, for example if a pet sitter want to add Newman house and she already has an account she can add the invitation code |
-| I13 | Notifications 30 days  | 🟡 medium | All notification should be deleted from the database after a month |
+| I8 | T&C  | 🟡 Minor | Add views for them, it worked in React Web Figma
+| I9 | Household name not updating | 🟡 Minor | when updating household name it settings is does not update on the Statusscreen |
+| I10 | logo size  | 🟡 Minor | increase logo size on status screen back |
+| I11 | Adding a new household  | 🟡 medium | Add household button to household island, for example if a pet sitter want to add Newman house and she already has an account she can add the invitation code |
+| I12 | Notifications 30 days  | 🟡 medium | All notification should be deleted from the database after a month |
+| I13 | Onboarding flow change order  | 🟡 medium | Swap the Name and Household order, first enter household code and then your name |
 
 ---
 
@@ -110,8 +119,12 @@ What is **not** working:
 - [x] **8.** Wire up email invitations
 - [x] **10.** Fix invited user signup error
 - [x] **I1.** Pet checkboxes horizontal row
-- [ ] **Next:** Work through Improvements backlog (I2 and I6 are highest severity)
-- [ ] **Bug 11:** Onboarding guard for invited users who take "Create Household" path
+- [x] **I2.** Invite modal spinner + name field removed + member sort + account/members pencil
+- [x] **Bug 17** — Delete user (remove from household) working. RLS policy fixed.
+- [ ] **I6** — Android safe area on StatusScreen (upload StatusScreen.tsx)
+- [ ] **Bug 11** — Onboarding guard for invited users who take "Create Household" path
+- [ ] **Bug 13** — New pet not appearing in StatusScreen after added in Settings
+- [ ] **Bug 14** — Android real-time sync failure
 - [ ] **Phase B:** Apple/Google OAuth, React Navigation, component extraction, production build prep
 
 ---
@@ -129,6 +142,7 @@ What is **not** working:
 | D7 | Invite email does not include household name — `{{ .Household }}` not a valid Supabase template variable | Phase B |
 | D8 | `sendMemberRemovedEmail()` is now a no-op log — no email sent when member is removed | Phase B |
 | D9 | Remove Developer Testing section from Settings view | Before launch |
+| D10 | Self-deletion / account deletion — required by App Store & Play Store policies. Members must be able to delete their own account (auth record + user record). | Before launch |
 
 ---
 
@@ -155,6 +169,8 @@ What is **not** working:
 - `createUserHousehold` is idempotent — checks for existing link before inserting; safe to call for users pre-linked by invite flow
 - Join-date filter rule → any function querying `notifications` on behalf of a user must fetch `user_households.created_at` and apply `.gte('created_at', joinDate)`. Both `getAllNotifications` and `getUnreadNotificationsCount` must always use the same filter — if one is updated, the other must be updated too
 - Loading guard rule → any async submit handler in an onboarding or join flow must have an `isLoading` guard (state or ref) preventing re-entry. Both the button's `disabled` prop and any keyboard `onSubmitEditing` handler must check the same guard
+- Member sort order → `sortMembers()` in `SettingsScreen` sorts: main member first, then active, then pending. Within each tier: oldest joined first (via `user_households.created_at` ORDER BY in `getMembersOfHousehold`). Applied on fresh fetch, household switch, and cache load.
+- Name edit rule → only the logged-in user can rename themselves (pencil in Account section). `handleSaveMemberName` updates Supabase, `members` state, and `currentUser` state — no `loadData()` needed.
 
 **Key naming to know:**
 - `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
@@ -165,11 +181,11 @@ What is **not** working:
 **Current file versions:**
 - `App.tsx` v3.8.0
 - `StatusScreen.tsx` v3.8.0 (pet checkboxes horizontal row fix)
-- `SettingsScreen.tsx` v3.6.0 (stores ghost auth ID after invite send)
+- `SettingsScreen.tsx` v3.7.3 (invite spinner + name field removed + member sort + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser`)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0 (invited user claim flow in handleSignUp)
 - `OnboardingFlow.tsx` v3.0.0 + isLoading guard on handleMemberComplete
-- `database.ts` — `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; `getAllNotifications()` and `getUnreadNotificationsCount()` apply join-date filter
+- `database.ts` — `getMembersOfHousehold` orders by `user_households.created_at` ASC and re-applies order after `.in()` fetch; `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; `getAllNotifications()` and `getUnreadNotificationsCount()` apply join-date filter
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`

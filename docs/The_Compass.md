@@ -2,7 +2,7 @@
 
 ## Chronological Project Log
 
-**22 January 2026**
+### 22 January 2026
 * **Milestone**: Initial Database Architecture Brainstorming.
 * **Architecture Shift**: Transitioned from a flat, single-user mental model to a multi-tenant relational model supporting shared pet custody. 
 
@@ -10,17 +10,20 @@
 
 * **Action**: Defined the core Entity Relationship Diagram (ERD), establishing a many-to-many relationship between Users and Households via a `HouseholdMember` or `UserHousehold` junction table.
 
-**Late January 2026**
+### Late January 2026**
+
 * **Milestone**: Figma AI Specification & ERD Revision.
 * **Decision**: Formalized the ERD in Markdown for Dan to use with Figma AI.
 * **Action**: Documented key design decisions including household-level Pro subscriptions, a 2-minute undo window tracked via an `UndoDeadline` field, and user invitation statuses (`Pending`/`Active`). Defined core logic for user registration, household management, and pet feeding in `database.ts`.
 
-**28 January 2026, 09:00am**
+### 28 January 2026, 09:00am
+
 * **Milestone**: App Prototype & Backend Strategy.
 * **Architecture Shift**: Decided to evaluate Supabase as the backend to replace local storage, specifically to support the real-time syncing fundamental to a multi-user household app.
 * **Action**: Transitioned from design validation to full-stack implementation after Dan successfully created a working UI prototype in Figma.
 
-**31 January 2026, 15:30pm**
+### 31 January 2026, 15:30pm
+
 * **Milestone**: Project initialized for React Web to React Native (RN) conversion.
 * **Architecture Shift**: Local storage paradigms were systematically replaced with asynchronous `AsyncStorage`.
 * **Action**: Converted `database.ts` (over 60 functions) to handle async data retrieval and created `TestDataScreen.tsx` to verify physical persistence on an iOS device via Expo Go.
@@ -218,7 +221,10 @@
 * **Future consideration noted**: Custom email body via SMTP from Edge Function would give full control over email content including household name. Phase B item.
 * **Future consideration noted**: `sendMemberRemovedEmail()` is currently a no-op. Wire up a proper removal notification email in Phase B.
 
-**28 February 2026 — Session 1**
+### 28 February 2026
+
+**Session 1**
+
 * **Milestone**: Invited User Signup Unblocked — `claim-invite` Edge Function.
 * **Problem**: After an admin sent an invite email via the `send-invite-email` Edge Function, `supabase.auth.admin.inviteUserByEmail()` created a ghost auth record in Supabase's `auth.users` table for the invitee's email. When the invitee then tapped "Sign up free with email" and called `supabase.auth.signUp()`, Supabase threw `AuthApiError: User already registered` — the invitee was completely unable to enter the app.
 * **Root Cause**: The Edge Function returned the ghost auth user's ID, but `sendInviteEmail()` in `database.ts` discarded it (returned only `boolean`). The ghost auth ID was never stored anywhere, so there was no way to identify and update the correct auth record later.
@@ -236,7 +242,8 @@
   - `createUserHousehold` must always be idempotent. The invite flow pre-creates the link; onboarding re-calls the same function. Without idempotency this produces a duplicate or constraint error.
 * **Verified**: Fresh invited user (jzwennis@icloud.com / Jay) signed up, landed in OnboardingFlow, joined household, reached StatusScreen. No errors. Tested on device by Jarques, 28 February 2026.
 
-**28 February 2026 — Session 2**
+**Session 2**
+
 * **Milestone**: Bug #8 Fixed — New Members No Longer Inherit Stale Notification History.
 * **Problem**: When a new user joined a household, they saw the full history of household notifications in `NotificationsPanel` (e.g. Henry saw 12 unread notifications from Daniel's activity before Henry joined). The bell badge reflected the same inflated count. Both `getAllNotifications` and `getUnreadNotificationsCount` queried the `notifications` table by `household_id` only — no filter for when the requesting user joined.
 * **Root Cause**: `user_households.created_at` (the user's join timestamp) existed but was never used in any notification query.
@@ -250,11 +257,44 @@
 * **Files changed**: `database.ts` (`getAllNotifications`, `getUnreadNotificationsCount`), `OnboardingFlow.tsx` (isLoading guard).
 * **Verified**: Fresh user joined household with existing notification history. Bell badge showed 0. Panel matched badge. Only one `member_joined` entry in database. Tested on device by Jarques, 28 February 2026.
 
-**1 March 2026**
+### 1 March 2026
+
 * **Milestone:** Improvements backlog begun — I1 resolved.
 * **Problem:** Pet checkboxes on StatusScreen were rendering in a vertical column instead of a horizontal row, making the UI inconsistent with the intended design.
 * **Action:** Wrapped individual pet checkbox items in a `petCheckboxRow` container with `flexDirection: 'row'` and `flexWrap: 'wrap'`. Added `checkboxRowInline` style for individual pet items. `StatusScreen.tsx` bumped to v3.8.0.
 * **Files changed**: `StatusScreen.tsx`
+
+### 3 March 2026 — Improvements & Bug Fix Session
+
+**Milestone**: Invite Modal Overhaul (I2 + Bug 12).
+* **Action**: Removed name field from Invite Member modal (Bug 12). Invite now requires email only. Name placeholder derived from email prefix and stored as temporary value until the invited user sets their real name during onboarding.
+* **Action**: Added `isSendingInvite` state to `SettingsScreen`. Moved guard before `canAddMember` call so spinner appears instantly on tap. All modal controls (Send button, Cancel button, X close, email input) disabled while send is in flight. `ActivityIndicator` replaces button text during send.
+* **Action**: Removed spurious `member_joined` notification on invite send. Notification was semantically incorrect (user hasn't joined yet) and created duplicate notifications when the user later completed onboarding.
+* **Files changed**: `SettingsScreen.tsx` v3.5.0 → v3.7.1.
+
+**Milestone**: Member Sort Order.
+* **Action**: Added `sortMembers()` helper to `SettingsScreen`. Sort order: main member first, then active members, then pending members. Within each tier: oldest joined first.
+* **Architecture**: `getMembersOfHousehold` in `database.ts` updated to `.order('created_at', { ascending: true })` on the `user_households` query. Added step to re-apply join-date order after `.in()` fetch (Supabase `.in()` does not preserve insertion order). `sortMembers()` applied on fresh fetch, household switch, and cache load.
+* **Files changed**: `SettingsScreen.tsx` v3.7.1 → v3.7.2, `database.ts`.
+
+**Milestone**: Member Name Editing Moved to Account Section (Bug 15 + Bug 16).
+* **Problem**: Main member could edit any member's name via pencil icons in the Members section. Design decision changed — each member edits only their own name.
+* **Action**: Removed pencil icon from all rows in the Members section.
+* **Action**: Added pencil icon to Account section. Tapping it opens an inline `TextInput` reusing existing `editingMemberId` / `memberNameInput` / `handleSaveMemberName` infrastructure — no new state or functions needed.
+* **Action**: Updated `handleSaveMemberName` to call `setCurrentUser` when `editingMemberId === currentUser?.UserID`, so the Account section name refreshes instantly without a `loadData()` call. Same eventual-consistency pattern as member sort — other devices see the updated name next time they open Settings.
+* **Architectural Rule**: For non-time-critical data changes (name edits, member removal), prefer optimistic local state updates over real-time subscriptions. Real-time sync is reserved for feeding events and notifications where timing matters.
+* **Files changed**: `SettingsScreen.tsx` v3.7.2 → v3.7.3.
+
+**Milestone**: Bug 17 Fixed — Member Deletion Now Working.
+* **Problem**: Tapping "Remove" on a member did nothing visually and the member remained in the database. Two root causes identified.
+* **Root Cause 1**: `suppressNextRealtimeLoad.current = true` was set at the top of the try block. This muted the Supabase broadcast triggered by the delete, and also interfered with the subsequent `loadData()` call — which read from cache and returned the stale member list.
+* **Root Cause 2**: The Supabase RLS DELETE policy on `user_households` was written as `auth.uid() = user_id` — only allowing a user to delete their own row. The main member deleting another member always resulted in 0 rows deleted because `auth.uid()` (main member) never matched `user_id` (removed member).
+* **Action**: Removed `suppressNextRealtimeLoad.current = true` from `handleRemoveMember` — no optimistic UI here, no echo to suppress.
+* **Action**: Replaced old RLS policy with: allow delete if the authenticated user is the main member of the household. Policy checks `users.is_main_member = true` for the requesting auth user against the household in question.
+* **Action**: Replaced `loadData()` with an optimistic state update — `setMembers(prev => prev.filter(m => m.UserID !== member.UserID))`. Member disappears from the list instantly. Other devices see the change next time they open Settings (eventual consistency).
+* **Architectural Rule — RLS DELETE pattern**: When the deleting user is not the owner of the row being deleted, the RLS policy must join to a permissions table (e.g. `user_households`) to verify the requester has authority. A simple `auth.uid() = column` policy will always fail in admin-deletes-member scenarios.
+* **Architectural Rule — suppress ref scope**: `suppressNextRealtimeLoad.current = true` must only be set for optimistic UI operations where an immediate echo from the triggered broadcast would cause a redundant re-render. It must never be set for pessimistic DB writes that rely on `loadData()` for UI refresh.
+* **Files changed**: `SettingsScreen.tsx` v3.7.3 (no version bump — logic only), `database.ts` (count check added to `removeUserFromHousehold`). Supabase RLS policy updated on `user_households` table.
 
 ---
 
@@ -340,3 +380,8 @@
 **20. Self-Notification on Household Creation (UX Debt)**
 * **The Issue**: When a user creates a new household, a `member_joined` or `household_created` notification is inserted and appears in their own NotificationsPanel and bell badge. The creator is notifying themselves of an action they just performed.
 * **The Risk**: This is noise that could erode trust in the notification system. The fix is either to suppress the notification insert entirely for the creator, or to filter out notifications where `requested_by` equals the current user's ID in both `getAllNotifications` and `getUnreadNotificationsCount`.
+
+**21. Self-Deletion / Account Deletion Required (Policy Debt)**
+* **The Issue**: Both Apple App Store and Google Play Store require apps to provide a mechanism for users to delete their own account. Currently only main members can remove other members from a household — there is no self-deletion flow.
+* **The Risk**: App will be rejected at review without this feature. Full account deletion requires removing the auth record, the `users` row, all `user_households` links, and handling the edge case where the user is the main member of a household (transfer or dissolve the household first).
+* **When to fix**: Before launch.
