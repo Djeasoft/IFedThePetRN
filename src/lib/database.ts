@@ -5,7 +5,7 @@
 // Version: 3.1.0 - Added resetToNewUser() for dev/testing
 // Version: 4.0.0 - Multi-Household Switcher Implementation
 // Version: 4.0.0 - Fetch the user's join date to exclude pre-join notifications from the count
-// Version: 4.1.0 - Sort members: main member first, then active by Creation Date
+// Version: 4.1.0 - Sort members: main member first, then active by Creation Date + removeUserFromHousehold count added
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -480,11 +480,13 @@ export async function createUserHousehold(userId: string, householdId: string, r
 
 export async function removeUserFromHousehold(userId: string, householdId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
+    const { error, count } = await supabase
       .from('user_households')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('user_id', userId)
       .eq('household_id', householdId);
+
+    console.log('removeUserFromHousehold: rows deleted:', count);
 
     if (error) {
       console.error('Error removing user from household:', error.message);

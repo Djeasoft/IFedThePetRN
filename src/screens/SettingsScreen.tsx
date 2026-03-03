@@ -11,7 +11,7 @@
 // Version: 3.7.0 - I2: Loading spinner on Send Invite button; Bug 12: Remove name field from invite modal
 // Version: 3.7.1 - Remove spurious member_joined notification on invite send
 // Version: 3.7.2 - Sort members: main member first, then active, then pending
-// Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser`
+// Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser` + 'handleRemoveMember' fixed
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -373,8 +373,11 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           style: 'destructive',
           onPress: async () => {
             try {
-              suppressNextRealtimeLoad.current = true;
+
               await removeUserFromHousehold(member.UserID, household.HouseholdID);
+
+              // Optimistic state update — remove member from view instantly
+              setMembers((prev) => prev.filter((m) => m.UserID !== member.UserID));
 
               // Send email notification
               sendMemberRemovedEmail(
@@ -392,7 +395,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                 memberName: member.MemberName,
               });
 
-              loadData();
             } catch (error) {
               Alert.alert('Error', 'Failed to remove member');
             }
