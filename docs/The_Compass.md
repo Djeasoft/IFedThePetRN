@@ -298,6 +298,21 @@
 
 ---
 
+### 4 March 2026
+
+* **Milestone**: Bug 18 + I9 + Bug 13 Fixed — Settings Changes Now Propagate to StatusScreen Instantly.
+* **Problem**: After any change in SettingsScreen (household name rename, pet added, pet deleted), StatusScreen continued to show stale data until the user tapped the feed button or restarted the app. Both I9 (household name not updating) and Bug 13 (new pet not appearing in StatusScreen checkboxes) were root-caused to the same gap.
+* **Root Cause**: `handleSaveHouseholdName`, `handleAddPet`, and `handleDeletePet` in `SettingsScreen.tsx` updated SettingsScreen's local state and wrote to Supabase, but had no mechanism to notify `StatusScreen`. StatusScreen only reloaded on mount, real-time Supabase broadcasts (pets/feeding_events tables), or a `householdId` prop change — none of which fired on a same-device Settings save.
+* **Architecture Decision — Eventual Consistency for Non-Time-Critical Data**: Real-time subscriptions are reserved for feeding events and notifications where timing matters. Household name and pet list changes use the prop-driven push pattern instead: Device A sees the change instantly; Device B sees it on the next natural load. This was a conscious decision, consistent with the architectural rule established on 3 March 2026.
+* **Action**: Added `onHouseholdNameChange` and `onPetsChange` callback props to `SettingsScreen`. Each relevant handler calls its callback after a successful Supabase write.
+* **Action**: `App.tsx` holds `overrideHouseholdName` and `overridePets` state. It receives the callbacks from `SettingsScreen` and passes the values down to `StatusScreen` as props.
+* **Action**: `StatusScreen` has two new `useEffect` hooks — one patches `household.HouseholdName` in local state when `overrideHouseholdName` changes; the other patches `pets` and resets checkbox selection when `overridePets` changes. Both use an `=== undefined` guard to prevent false triggers on boot.
+* **Architectural Rule**: For non-time-critical data (household name, pet list, member names), prefer the prop-driven push pattern over real-time subscriptions. The pattern: SettingsScreen callback → App.tsx state → StatusScreen `useEffect` patch. This avoids unnecessary WebSocket subscriptions and keeps the subscription layer clean.
+* **Files changed**: `App.tsx` v3.8.0 → v3.9.0, `StatusScreen.tsx` v3.8.0 → v3.9.0, `SettingsScreen.tsx` v3.7.3 → v3.8.0.
+* **Outcome**: Household name and pet list changes on Device A reflect on StatusScreen instantly after Settings closes. Device B sees changes on next natural load.
+
+---
+
 ## Unresolved Technical Debt & Architectural Decisions
 
 ### Categorized Debt & Ghost Logic

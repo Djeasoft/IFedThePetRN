@@ -1,5 +1,5 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Tuesday, 3 March 2026
+**Last Updated:** Wednesday, 4 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
 **Next Session:** Pick up from WHAT'S NEXT — I6 (Android safe area) is highest priority remaining improvement.
 
@@ -55,6 +55,8 @@ What is verified and working:
 - Members section: pencil removed — admin can no longer rename other members ✅ *(fixed 3 Mar)*
 - `handleSaveMemberName` updates `members` and `currentUser` state instantly on save ✅ *(fixed 3 Mar)*
 - Member removal works: RLS policy fixed, member disappears from view instantly ✅ *(fixed 3 Mar)*
+- Household name change in Settings updates StatusScreen instantly on Device A ✅ *(fixed 4 Mar)*
+- Pet added/deleted in Settings updates StatusScreen checkboxes instantly on Device A ✅ *(fixed 4 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -79,12 +81,12 @@ What is **not** working:
 | 10 | ~~Create new user after invite fails~~ | ✅ Fixed | `claim-invite` Edge Function. `AuthScreen.handleSignUp` detects pending user and claims ghost auth account. `createUserHousehold` made idempotent. |
 | 11 | Invited user takes "Create Household" path instead of "Join" | 🟠 Medium | Invited user ends up with a spurious extra household. Onboarding needs a UX guard to detect pending invited users and steer them to the Join path. Needs brainstorm before code. |
 | 12 | ~~Invite modal had name field~~ | ✅ Fixed | Name field removed. Email only. Placeholder from email prefix. `SettingsScreen.tsx` v3.7.0 |
-| 13 | New pet not appearing in StatusScreen checkboxes after being added in Settings | 🟠 Medium | When main member adds a new pet in Settings, StatusScreen pet checkbox section does not update on return. Likely related to suppressNextRealtimeLoad ref suppressing the Supabase broadcast. Needs investigation. |
+| 13 | ~~New pet not appearing in StatusScreen checkboxes after being added in Settings~~ | ✅ Fixed | Resolved as part of Bug 18 fix — `onPetsChange` callback now pushes fresh pet list to StatusScreen instantly via App.tsx props. `StatusScreen.tsx` v3.9.0 |
 | 14 | Real-time Sync Failure on Android Client | 🔴 Major | The Android app fails to reflect state changes made by other devices in real-time. In the test, iOS devices updated to "20:24" immediately, while the Android device remained stuck at "20:18." Indicates a potential issue with the WebSocket listener or background polling on the Android build. |
 | 15 | ~~Rename Account/Member name~~ | ✅ Fixed | Pencil in Account section. `handleSaveMemberName` updates `currentUser` immediately. `SettingsScreen.tsx` v3.7.3 |
 | 16 | ~~Remove Edit Pencil in members section~~ | ✅ Fixed | Pencil removed from all member rows. Admin no longer renames other members. `SettingsScreen.tsx` v3.7.3 |
 | 17 | ~~Unable to Delete User~~ | ✅ Fixed | `suppressNextRealtimeLoad` removed from `handleRemoveMember`. RLS DELETE policy added to `user_households` — main member can remove others. Optimistic state update removes member from view instantly. |
-| 18 | Statusscreen not updating | 🔴 Major | the statusscreen does not updated anything after changes have been made on the settingsscreen |
+| 18 | ~~StatusScreen not updating after Settings changes~~ | ✅ Fixed | `onHouseholdNameChange` and `onPetsChange` callbacks added to SettingsScreen. App.tsx holds override state and passes it as props to StatusScreen. StatusScreen patches local state instantly via `useEffect`. Eventual consistency for Device B — by design. `App.tsx` v3.9.0, `StatusScreen.tsx` v3.9.0, `SettingsScreen.tsx` v3.8.0 |
 
 ---
 
@@ -99,13 +101,13 @@ What is **not** working:
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
-| I8 | T&C  | 🟡 Minor | Add views for them, it worked in React Web Figma
-| I9 | Household name not updating | 🟡 Minor | when updating household name it settings is does not update on the Statusscreen |
-| I10 | logo size  | 🟡 Minor | increase logo size on status screen back |
-| I11 | Adding a new household  | 🟡 medium | Add household button to household island, for example if a pet sitter want to add Newman house and she already has an account she can add the invitation code |
-| I12 | Notifications 30 days  | 🟡 medium | All notification should be deleted from the database after a month |
-| I13 | Onboarding flow change order  | 🟡 medium | Swap the Name and Household order, first enter household code and then your name |
-| I14 | Defaults back to our pet | 🟡 medium | When a main member change the subscription back to free tier the pets should be removed and the default Our pet should be back |
+| I8 | T&C | 🟡 Minor | Add views for them, it worked in React Web Figma |
+| I9 | ~~Household name not updating on StatusScreen~~ | ✅ Fixed | Resolved as part of Bug 18 fix. `onHouseholdNameChange` callback pushes new name to StatusScreen instantly via App.tsx props. |
+| I10 | Logo size | 🟡 Minor | Increase logo size on StatusScreen |
+| I11 | Adding a new household | 🟡 Medium | Add household button to household island, for example if a pet sitter wants to add Newman house and already has an account she can add the invitation code |
+| I12 | Notifications 30 days | 🟡 Medium | All notifications should be deleted from the database after a month |
+| I13 | Onboarding flow change order | 🟡 Medium | Swap the Name and Household order, first enter household code and then your name |
+| I14 | Defaults back to our pet | 🟡 Medium | When a main member changes the subscription back to free tier the pets should be removed and the default "Our Pet" should be back |
 
 ---
 
@@ -124,9 +126,9 @@ What is **not** working:
 - [x] **I1.** Pet checkboxes horizontal row
 - [x] **I2.** Invite modal spinner + name field removed + member sort + account/members pencil
 - [x] **Bug 17** — Delete user (remove from household) working. RLS policy fixed.
+- [x] **Bug 18 + I9 + Bug 13** — StatusScreen updates instantly after Settings changes (household name, pets). Prop-driven via App.tsx.
 - [ ] **I6** — Android safe area on StatusScreen (upload StatusScreen.tsx)
 - [ ] **Bug 11** — Onboarding guard for invited users who take "Create Household" path
-- [ ] **Bug 13** — New pet not appearing in StatusScreen after added in Settings
 - [ ] **Bug 14** — Android real-time sync failure
 - [ ] **Phase B:** Apple/Google OAuth, React Navigation, component extraction, production build prep
 
@@ -166,6 +168,7 @@ What is **not** working:
 - `getCurrentUserId()` is self-healing → falls back to Supabase session if AsyncStorage is empty
 - Lifted state pattern → `unreadCount` and `currentHouseholdId` owned by `App.tsx`, shared across screens via props
 - Prop-driven household switching → `App.tsx` is the single source of truth for `currentHouseholdId`; all screens receive it as a prop
+- Prop-driven Settings→StatusScreen push (Bug 18) → `overrideHouseholdName` and `overridePets` owned by `App.tsx`; SettingsScreen calls `onHouseholdNameChange` / `onPetsChange` callbacks after successful DB writes; StatusScreen patches local state instantly via `useEffect`. Device B sees changes on next natural load — eventual consistency by design for non-time-critical data.
 - Merged real-time useEffect → household changes (pets/feeding_events) and notification inserts share one useEffect keyed on `[activeHouseholdId]` only, preventing subscription teardown during `loadData()` re-renders
 - Edge Function pattern → sensitive server-side operations go through Supabase Edge Functions using the service role key, never the app bundle
 - Invited user claim flow → `handleSignUp` in `AuthScreen` calls `getUserByEmail` first; if pending user found, calls `claim-invite` Edge Function to set password on ghost auth user, then `signInWithEmail` — no new auth record needed
@@ -174,17 +177,19 @@ What is **not** working:
 - Loading guard rule → any async submit handler in an onboarding or join flow must have an `isLoading` guard (state or ref) preventing re-entry. Both the button's `disabled` prop and any keyboard `onSubmitEditing` handler must check the same guard
 - Member sort order → `sortMembers()` in `SettingsScreen` sorts: main member first, then active, then pending. Within each tier: oldest joined first (via `user_households.created_at` ORDER BY in `getMembersOfHousehold`). Applied on fresh fetch, household switch, and cache load.
 - Name edit rule → only the logged-in user can rename themselves (pencil in Account section). `handleSaveMemberName` updates Supabase, `members` state, and `currentUser` state — no `loadData()` needed.
+- Eventual consistency rule → for non-time-critical data (household name, pet names, member names), Device A updates instantly via local state; Device B sees changes on next natural load. Real-time subscriptions are reserved for feeding events and notifications only.
 
 **Key naming to know:**
 - `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
 - `unreadCount` lives in `App.tsx` (v3.6.0), not StatusScreen
 - `currentHouseholdId` lives in `App.tsx` (v3.7.0), passed as `householdId` prop to `StatusScreen` and `NotificationsPanel`
 - `suppressNotificationSoundRef` lives in `App.tsx` (v3.8.0), passed to `StatusScreen` and `SettingsScreen`
+- `overrideHouseholdName` and `overridePets` live in `App.tsx` (v3.9.0), passed to `StatusScreen` as props
 
 **Current file versions:**
-- `App.tsx` v3.8.0
-- `StatusScreen.tsx` v3.8.0 (pet checkboxes horizontal row fix)
-- `SettingsScreen.tsx` v3.7.3 (invite spinner + name field removed + member sort + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser`)
+- `App.tsx` v3.9.0
+- `StatusScreen.tsx` v3.9.0 (Bug 18: reacts to overrideHouseholdName + overridePets props)
+- `SettingsScreen.tsx` v3.8.0 (Bug 18: calls onHouseholdNameChange + onPetsChange callbacks after saves)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0 (invited user claim flow in handleSignUp)
 - `OnboardingFlow.tsx` v3.0.0 + isLoading guard on handleMemberComplete
