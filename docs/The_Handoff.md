@@ -84,6 +84,8 @@ What is **not** working:
 | 15 | ~~Rename Account/Member name~~ | ✅ Fixed | Pencil in Account section. `handleSaveMemberName` updates `currentUser` immediately. `SettingsScreen.tsx` v3.7.3 |
 | 16 | ~~Remove Edit Pencil in members section~~ | ✅ Fixed | Pencil removed from all member rows. Admin no longer renames other members. `SettingsScreen.tsx` v3.7.3 |
 | 17 | ~~Unable to Delete User~~ | ✅ Fixed | `suppressNextRealtimeLoad` removed from `handleRemoveMember`. RLS DELETE policy added to `user_households` — main member can remove others. Optimistic state update removes member from view instantly. |
+| 18 | Statusscreen not updating | 🔴 Major | the statusscreen does not updated anything after changes have been made on the settingsscreen |
+
 ---
 
 ## 3. ENHANCEMENTS & IMPROVEMENTS
@@ -103,6 +105,7 @@ What is **not** working:
 | I11 | Adding a new household  | 🟡 medium | Add household button to household island, for example if a pet sitter want to add Newman house and she already has an account she can add the invitation code |
 | I12 | Notifications 30 days  | 🟡 medium | All notification should be deleted from the database after a month |
 | I13 | Onboarding flow change order  | 🟡 medium | Swap the Name and Household order, first enter household code and then your name |
+| I14 | Defaults back to our pet | 🟡 medium | When a main member change the subscription back to free tier the pets should be removed and the default Our pet should be back |
 
 ---
 
