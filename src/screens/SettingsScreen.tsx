@@ -12,6 +12,7 @@
 // Version: 3.7.1 - Remove spurious member_joined notification on invite send
 // Version: 3.7.2 - Sort members: main member first, then active, then pending
 // Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser` + 'handleRemoveMember' fixed
+// Version: 3.8.0 - Bug 18: Call onHouseholdNameChange and onPetsChange callbacks so App.tsx can push updates to StatusScreen
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -81,9 +82,12 @@ interface SettingsScreenProps {
   onResetOnboarding?: () => void;
   onHouseholdSwitch?: (householdId: string) => void;
   suppressNotificationSoundRef?: React.MutableRefObject<boolean>;
+  // FIX v3.8.0 (Bug 18): Callbacks so App.tsx can push name/pet changes to StatusScreen instantly
+  onHouseholdNameChange?: (newName: string) => void;
+  onPetsChange?: (pets: Pet[]) => void;
 }
 
-export function SettingsScreen({ visible, onClose, onResetOnboarding, onHouseholdSwitch, suppressNotificationSoundRef }: SettingsScreenProps) {
+export function SettingsScreen({ visible, onClose, onResetOnboarding, onHouseholdSwitch, suppressNotificationSoundRef, onHouseholdNameChange, onPetsChange }: SettingsScreenProps) {
   const { isDark, theme, toggleTheme } = useTheme();
 
   // State
@@ -256,6 +260,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       });
       setHousehold({ ...household, HouseholdName: householdNameInput.trim() });
       setEditingHouseholdName(false);
+      // FIX v3.8.0 (Bug 18): Push updated name to StatusScreen via App.tsx
+      onHouseholdNameChange?.(householdNameInput.trim());
     } catch (error) {
       Alert.alert('Error', 'Failed to update household name');
     }
@@ -422,7 +428,11 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       await createPet(newPetName.trim(), household.HouseholdID);
       setShowAddPetModal(false);
       setNewPetName('');
-      loadData();
+      // Reload so we get the newly created pet with its real PetID
+      await loadData();
+      // FIX v3.8.0 (Bug 18): Push updated pet list to StatusScreen via App.tsx
+      const freshPets = await getPetsByHouseholdId(household.HouseholdID);
+      onPetsChange?.(freshPets);
     } catch (error) {
       Alert.alert('Error', 'Failed to add pet');
     }
@@ -441,6 +451,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             try {
               suppressNextRealtimeLoad.current = true;
               await deletePet(pet.PetID);
+              // FIX v3.8.0 (Bug 18): Push updated pet list to StatusScreen via App.tsx
+              const freshPets = await getPetsByHouseholdId(household!.HouseholdID);
+              onPetsChange?.(freshPets);
               loadData();
             } catch (error) {
               Alert.alert('Error', 'Failed to delete pet');

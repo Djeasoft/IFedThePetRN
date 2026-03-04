@@ -9,6 +9,7 @@
 // Version: 3.5.0 - Real-time notification subscription + bell sound on new notifications from other devices
 // Version: 3.6.0 - Add suppressNotificationSoundRef prop from App.tsx for cross-screen bell suppression
 // Version: 3.7.0 - Fix: merge household + notification subscriptions into one useEffect (same [activeHouseholdId] dep)
+// Version: 3.9.0 - Bug 18: React to household name + pet list changes pushed from SettingsScreen via App.tsx props
 //                  so the notification subscription is never torn down by loadData() re-renders, ensuring
 //                  feed_request and other standalone notifications also update the bell badge in real-time
 // Version: 3.8.0 - Fix: pet checkboxes render in horizontal row with flexWrap (I1)
@@ -64,6 +65,10 @@ interface StyledStatusScreenProps {
   // FIX v3.6.0: Shared ref from App.tsx — when SettingsScreen creates a notification,
   // this ref is set to true so we skip the bell sound for that event
   suppressNotificationSoundRef?: React.MutableRefObject<boolean>;
+  // FIX v3.9.0 (Bug 18): Pushed from App.tsx when SettingsScreen changes household name or pets.
+  // Avoids a full reload — just patches local state instantly on Device A.
+  overrideHouseholdName?: string;
+  overridePets?: Pet[];
 }
 
 interface HistoryEventDetails {
@@ -92,6 +97,8 @@ export function StyledStatusScreen({
   onUnreadCountChange,
   householdId,
   suppressNotificationSoundRef,
+  overrideHouseholdName,
+  overridePets,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
 
@@ -393,6 +400,23 @@ export function StyledStatusScreen({
       loadData({ skipCache: true });
     }
   }, [householdId]);
+
+  // FIX v3.9.0 (Bug 18): When SettingsScreen saves a new household name, App.tsx pushes
+  // it here via the overrideHouseholdName prop. Patch local state instantly — no reload needed.
+  useEffect(() => {
+    if (overrideHouseholdName === undefined) return;
+    setHousehold((prev) => prev ? { ...prev, HouseholdName: overrideHouseholdName } : prev);
+  }, [overrideHouseholdName]);
+
+  // FIX v3.9.0 (Bug 18): When SettingsScreen adds or deletes a pet, App.tsx pushes the
+  // updated pet list here. Patch local state and reset selection to avoid stale checkbox state.
+  useEffect(() => {
+    if (overridePets === undefined) return;
+    setPets(overridePets);
+    // Reset selection — previously selected pet IDs may no longer be valid
+    setSelectedPetIds([]);
+    setFeedAllSelected(true);
+  }, [overridePets]);
 
   // Handle pet selection
   const handlePetToggle = (petId: string) => {

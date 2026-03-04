@@ -13,6 +13,7 @@
 // Version: 3.6.0 - Fix: Lift unreadCount to App level so NotificationsPanel mark-as-read updates the bell badge
 // Version: 3.7.0 - Fix: App.tsx is now source of truth for currentHouseholdId; passes it as prop to all screens so household switches propagate correctly
 // Version: 3.8.0 - Add suppressNotificationSoundRef shared between SettingsScreen and StatusScreen for bell sound suppression
+// Version: 3.9.0 - Bug 18: Hold overrideHouseholdName + overridePets state; wire SettingsScreen callbacks to push updates to StatusScreen
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
@@ -52,6 +53,12 @@ function AppRouter() {
   // FIX v3.8.0: Shared ref — when SettingsScreen (or any sibling) creates a notification,
   // it sets this to true so StatusScreen skips the bell sound for that one event.
   const suppressNotificationSoundRef = useRef(false);
+
+  // FIX v3.9.0 (Bug 18): Owned by App.tsx, pushed to StatusScreen as props.
+  // SettingsScreen calls the callbacks below after a successful save.
+  // StatusScreen patches its local state instantly via useEffect — no reload needed.
+  const [overrideHouseholdName, setOverrideHouseholdName] = useState<string | undefined>(undefined);
+  const [overridePets, setOverridePets] = useState<any[] | undefined>(undefined);
 
   // Check onboarding status when authenticated + verified
   useEffect(() => {
@@ -141,6 +148,16 @@ function AppRouter() {
     setCurrentHouseholdId(newHouseholdId);
   };
 
+  // FIX v3.9.0 (Bug 18): Called by SettingsScreen after a household name save.
+  const handleHouseholdNameChange = (newName: string) => {
+    setOverrideHouseholdName(newName);
+  };
+
+  // FIX v3.9.0 (Bug 18): Called by SettingsScreen after a pet is added or deleted.
+  const handlePetsChange = (pets: any[]) => {
+    setOverridePets(pets);
+  };
+
   // Loading state
   if (authLoading || (isAuthenticated && isEmailVerified && checkingOnboarding)) {
     return (
@@ -171,6 +188,8 @@ function AppRouter() {
         onUnreadCountChange={setUnreadCount}
         householdId={currentHouseholdId ?? undefined}
         suppressNotificationSoundRef={suppressNotificationSoundRef}
+        overrideHouseholdName={overrideHouseholdName}
+        overridePets={overridePets}
       />
       <SettingsScreen
         visible={showSettings}
@@ -178,6 +197,8 @@ function AppRouter() {
         onResetOnboarding={handleResetFromSettings}
         onHouseholdSwitch={handleHouseholdSwitch}
         suppressNotificationSoundRef={suppressNotificationSoundRef}
+        onHouseholdNameChange={handleHouseholdNameChange}
+        onPetsChange={handlePetsChange}
       />
       <NotificationsPanel
         visible={showNotifications}
