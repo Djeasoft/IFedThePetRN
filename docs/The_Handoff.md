@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Wednesday, 4 March 2026
+**Last Updated:** Thursday, 5 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — I6 (Android safe area) is highest priority remaining improvement.
+**Next Session:** Pick up from WHAT'S NEXT — Bug 11 (onboarding guard for invited users) is highest priority.
 
 ---
 
@@ -57,11 +57,14 @@ What is verified and working:
 - Member removal works: RLS policy fixed, member disappears from view instantly ✅ *(fixed 3 Mar)*
 - Household name change in Settings updates StatusScreen instantly on Device A ✅ *(fixed 4 Mar)*
 - Pet added/deleted in Settings updates StatusScreen checkboxes instantly on Device A ✅ *(fixed 4 Mar)*
+- Android safe area fixed — header, logo, and bell clear the status bar correctly ✅ *(fixed 5 Mar)*
+- Logo centred precisely in header on all screen widths ✅ *(fixed 5 Mar)*
+- Logo size increased (height 22.4 → 26.4, width 140 → 165) ✅ *(fixed 5 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb.
+**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb. Android safe area + logo fixes verified on real Android device, 5 Mar.
 
 ---
 
@@ -99,11 +102,11 @@ What is **not** working:
 | I3 | Move Invitation Code into Household card | 🟡 Minor | On Settings screen, invitation code sits outside the household container. Move it inside. |
 | I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own "Household Created" notification — should they? Filter out notifications where `requested_by` = current user, or suppress on insert. |
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
-| I6 | Android safe area on StatusScreen | 🟠 Medium | Menu button, logo, and bell need more top margin on Android. |
+| I6 | ~~Android safe area on StatusScreen~~ | ✅ Fixed | `useSafeAreaInsets` applied to main screen, loading screen, and history modal. `SafeAreaProvider` added to `App.tsx` as outermost wrapper. `SafeAreaView` removed from `StatusScreen.tsx`. `App.tsx` v3.10.0, `StatusScreen.tsx` v3.10.0. |
 | I7 | Invite Member modal doesn't push up on keyboard (iPhone) | 🟡 Minor | Keyboard covers modal on iPhone. Check Android too. |
 | I8 | T&C | 🟡 Minor | Add views for them, it worked in React Web Figma |
 | I9 | ~~Household name not updating on StatusScreen~~ | ✅ Fixed | Resolved as part of Bug 18 fix. `onHouseholdNameChange` callback pushes new name to StatusScreen instantly via App.tsx props. |
-| I10 | Logo size | 🟡 Minor | Increase logo size on StatusScreen |
+| I10 | ~~Logo size and centring on StatusScreen~~ | ✅ Fixed | Logo absolute-positioned in header so it always centres on true screen width. Size increased: height 22.4 → 26.4, width 140 → 165 (aspect ratio preserved). `StatusScreen.tsx` v3.10.1. |
 | I11 | Adding a new household | 🟡 Medium | Add household button to household island, for example if a pet sitter wants to add Newman house and already has an account she can add the invitation code |
 | I12 | Notifications 30 days | 🟡 Medium | All notifications should be deleted from the database after a month |
 | I13 | Onboarding flow change order | 🟡 Medium | Swap the Name and Household order, first enter household code and then your name |
@@ -127,7 +130,8 @@ What is **not** working:
 - [x] **I2.** Invite modal spinner + name field removed + member sort + account/members pencil
 - [x] **Bug 17** — Delete user (remove from household) working. RLS policy fixed.
 - [x] **Bug 18 + I9 + Bug 13** — StatusScreen updates instantly after Settings changes (household name, pets). Prop-driven via App.tsx.
-- [ ] **I6** — Android safe area on StatusScreen (upload StatusScreen.tsx)
+- [x] **I6** — Android safe area fixed. `SafeAreaProvider` added to App.tsx. Verified on real device.
+- [x] **I10** — Logo centred absolutely in header. Size increased. `StatusScreen.tsx` v3.10.1.
 - [ ] **Bug 11** — Onboarding guard for invited users who take "Create Household" path
 - [ ] **Bug 14** — Android real-time sync failure
 - [ ] **Phase B:** Apple/Google OAuth, React Navigation, component extraction, production build prep
@@ -178,6 +182,8 @@ What is **not** working:
 - Member sort order → `sortMembers()` in `SettingsScreen` sorts: main member first, then active, then pending. Within each tier: oldest joined first (via `user_households.created_at` ORDER BY in `getMembersOfHousehold`). Applied on fresh fetch, household switch, and cache load.
 - Name edit rule → only the logged-in user can rename themselves (pencil in Account section). `handleSaveMemberName` updates Supabase, `members` state, and `currentUser` state — no `loadData()` needed.
 - Eventual consistency rule → for non-time-critical data (household name, pet names, member names), Device A updates instantly via local state; Device B sees changes on next natural load. Real-time subscriptions are reserved for feeding events and notifications only.
+- Safe area rule → `SafeAreaView` is not used in `StatusScreen.tsx`. All safe area handling is done via `useSafeAreaInsets()` from `react-native-safe-area-context`, with `paddingTop: insets.top` applied to outer `View` wrappers. `SafeAreaProvider` must remain as the outermost wrapper in `App.tsx` for this to function.
+- Logo centring rule → logo in `StatusScreen` header uses `position: 'absolute'` with `left: 0, right: 0` so it centres on true screen width, independent of button widths on either side.
 
 **Key naming to know:**
 - `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
@@ -187,8 +193,8 @@ What is **not** working:
 - `overrideHouseholdName` and `overridePets` live in `App.tsx` (v3.9.0), passed to `StatusScreen` as props
 
 **Current file versions:**
-- `App.tsx` v3.9.0
-- `StatusScreen.tsx` v3.9.0 (Bug 18: reacts to overrideHouseholdName + overridePets props)
+- `App.tsx` v3.10.0 (I6: SafeAreaProvider added as outermost wrapper)
+- `StatusScreen.tsx` v3.10.1 (I6: SafeAreaView replaced with useSafeAreaInsets; I10: logo absolutely centred, size increased)
 - `SettingsScreen.tsx` v3.8.0 (Bug 18: calls onHouseholdNameChange + onPetsChange callbacks after saves)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0 (invited user claim flow in handleSignUp)

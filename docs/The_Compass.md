@@ -313,6 +313,27 @@
 
 ---
 
+### 5 March 2026
+
+* **Milestone**: I6 Fixed — Android Safe Area on StatusScreen.
+* **Problem**: The header (menu button, logo, notification bell) rendered under the Android system status bar. `SafeAreaView` from React Native does not apply a top inset on Android, so the content was not cleared.
+* **Action**: Replaced all outer `SafeAreaView` instances in `StatusScreen.tsx` (main screen, loading screen, and history modal) with plain `View` components. Applied `paddingTop: insets.top` inline via the `useSafeAreaInsets()` hook from `react-native-safe-area-context`.
+* **Action**: Added `<SafeAreaProvider>` as the outermost wrapper in `App.tsx` — this is a required peer for `useSafeAreaInsets()` to function. Without it the app crashes with "No safe area value available."
+* **Action**: Removed `SafeAreaView` from the `StatusScreen.tsx` React Native import block (now unused).
+* **Architectural Rule**: Any screen using `useSafeAreaInsets()` requires `<SafeAreaProvider>` as an ancestor in the component tree. Add it once at the root of `App.tsx` — all screens then have access without further setup. `SafeAreaView` and `useSafeAreaInsets` are not interchangeable — `SafeAreaView` does not apply the Android status bar inset reliably; the hook does.
+* **Files changed**: `App.tsx` v3.9.0 → v3.10.0, `StatusScreen.tsx` v3.9.0 → v3.10.0.
+* **Verified**: Tested on real Android device, 5 March 2026.
+
+* **Milestone**: Logo Centring and Size Fix (I10).
+* **Problem**: The logo in the StatusScreen header was visually offset left of centre on both iOS and Android. Root cause: `logoContainer` used `marginLeft: -40` to compensate for the menu button, which is a fragile approximation that varies by screen width.
+* **Action**: Changed `logoContainer` to use `position: 'absolute'` with `left: 0` and `right: 0`. The logo now centres on the true screen width regardless of button sizes on either side. Menu button and bell remain tappable — they sit above the absolutely positioned logo in the z-order.
+* **Action**: Increased logo size from `height: 22.4 / width: 140` to `height: 26.4 / width: 165`, preserving the original aspect ratio (6.25:1).
+* **Architectural Rule**: When centering a header title/logo between two action buttons, always use absolute positioning (`position: 'absolute', left: 0, right: 0`) rather than negative margins or flex offsets. Negative margins are screen-width-dependent and will drift on different devices.
+* **Files changed**: `StatusScreen.tsx` v3.10.0 → v3.10.1.
+* **Verified**: Tested on real iOS and Android devices, 5 March 2026.
+
+---
+
 ## Unresolved Technical Debt & Architectural Decisions
 
 ### Categorized Debt & Ghost Logic
