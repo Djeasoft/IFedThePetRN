@@ -14,9 +14,11 @@
 // Version: 3.7.0 - Fix: App.tsx is now source of truth for currentHouseholdId; passes it as prop to all screens so household switches propagate correctly
 // Version: 3.8.0 - Add suppressNotificationSoundRef shared between SettingsScreen and StatusScreen for bell sound suppression
 // Version: 3.9.0 - Bug 18: Hold overrideHouseholdName + overridePets state; wire SettingsScreen callbacks to push updates to StatusScreen
+// Version: 3.10.0 - Fix: Android safe area top inset applied to header (I6)
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { supabase } from './src/lib/supabaseClient';
@@ -29,11 +31,13 @@ import { isOnboardingCompleted, resetOnboarding, userExistsInDatabase } from './
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ThemeProvider>
-        <AppRouter />
-      </ThemeProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppRouter />
+        </ThemeProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 

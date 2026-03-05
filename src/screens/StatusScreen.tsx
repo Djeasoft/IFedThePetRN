@@ -9,10 +9,10 @@
 // Version: 3.5.0 - Real-time notification subscription + bell sound on new notifications from other devices
 // Version: 3.6.0 - Add suppressNotificationSoundRef prop from App.tsx for cross-screen bell suppression
 // Version: 3.7.0 - Fix: merge household + notification subscriptions into one useEffect (same [activeHouseholdId] dep)
-// Version: 3.9.0 - Bug 18: React to household name + pet list changes pushed from SettingsScreen via App.tsx props
-//                  so the notification subscription is never torn down by loadData() re-renders, ensuring
-//                  feed_request and other standalone notifications also update the bell badge in real-time
 // Version: 3.8.0 - Fix: pet checkboxes render in horizontal row with flexWrap (I1)
+// Version: 3.9.0 - Bug 18: React to household name + pet list changes pushed from SettingsScreen via App.tsx props so the notification subscription is never torn down by loadData() re-renders, ensuring feed_request and other standalone notifications also update the bell badge in real-time
+// Version: 3.10.0 - Fix: Android safe area top inset applied to header (I6)
+// Version: 3.10.1 - Logo on StatusScreen: Centered and increased size
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -20,13 +20,13 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Image,
   Alert,
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   getCurrentUserId,
   getHouseholdsForUser,
@@ -101,6 +101,7 @@ export function StyledStatusScreen({
   overridePets,
 }: StyledStatusScreenProps) {
   const { isDark, theme } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [pets, setPets] = useState<Pet[]>([]);
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
@@ -131,7 +132,7 @@ export function StyledStatusScreen({
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isOperationInFlight, setIsOperationInFlight] = useState(false);
   const suppressNextRealtimeLoad = useRef(false);
-  
+
   // Ref to suppress bell sound for own-device notification actions
   const suppressNextNotificationSound = useRef(false);
 
@@ -153,7 +154,7 @@ export function StyledStatusScreen({
       console.warn('Could not play notification sound:', error);
     }
   };
-  
+
   const legacyCleanupDone = useRef(false);
 
   // Helper function to resolve event details
@@ -630,16 +631,16 @@ export function StyledStatusScreen({
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.contentContainer}>
         {/* Header */}
         <View style={styles.header}>
@@ -905,7 +906,7 @@ export function StyledStatusScreen({
           presentationStyle="pageSheet"
           onRequestClose={() => setShowHistoryModal(false)}
         >
-          <SafeAreaView style={[styles.modalContainer, { backgroundColor: theme.background }]}>
+          <View style={[styles.modalContainer, { backgroundColor: theme.background, paddingTop: insets.top }]}>
             {/* Modal Header */}
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Feeding History</Text>
@@ -956,10 +957,10 @@ export function StyledStatusScreen({
                 );
               })}
             </ScrollView>
-          </SafeAreaView>
+          </View>
         </Modal>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -980,7 +981,7 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 32,
     alignItems: 'center',
   },
@@ -998,14 +999,15 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   logoContainer: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: -40,
   },
   logoImage: {
-    height: 22.4,
-    width: 140,
+    height: 26.4,
+    width: 165,
   },
   notificationButton: {
     padding: 8,
