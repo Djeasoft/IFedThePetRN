@@ -27,13 +27,18 @@ Act as my Senior Solutions Architect, R&D Lead, software developer and DBA for t
    - Summarize what was built but not documented
    - Identify any inconsistencies between docs and reality
 
+5. **Source Code:**
+   - Always ask for the relevant source file(s) before writing or modifying code
+   - Do not assume the current file contents from memory or past conversations
+   - Jarques does not share source code in the sidebar — request it just-in-time when needed
+
 **ONLY AFTER the gap analysis is complete** should we proceed with new work.
 
 ---
 
 ## Project Context
 
-**App:** I Fed The Pet (IFTP) — internal logistics and operations management web app for DSV. Clerks dispatch trips through Mobile Device Allocations. Replaces legacy LITS operations.
+**App:** I Fed The Pet (IFTP) — React Native / Expo mobile app for pet feeding coordination across shared households. Built under the Djeasoft umbrella.
 
 **Stack:** Expo, Node.js, TypeScript, React Native and Supabase
 
