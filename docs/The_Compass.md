@@ -332,6 +332,22 @@
 * **Files changed**: `StatusScreen.tsx` v3.10.0 → v3.10.1.
 * **Verified**: Tested on real iOS and Android devices, 5 March 2026.
 
+* **Milestone**: Bug 11 + I13 Fixed — Onboarding Step Reorder & Invited User Guard.
+* **Problem (I13)**: The onboarding flow collected the user's name before establishing household intent, which was inconsistent with the Figma design and created a confusing UX for both paths.
+* **Problem (Bug 11)**: An invited user who arrived at `OnboardingFlow` after completing `AuthScreen` sign-up was presented with the welcome choice screen. If they tapped "Create Household" they ended up with a spurious extra household alongside the one they were invited to.
+* **Root Cause (Bug 11)**: The pending user check only ran when a card was tapped (`handleModeSelection`), not on mount. The welcome screen rendered immediately while the user's `InvitationStatus` was still unknown.
+* **Action (I13)**: Reordered steps for both paths — household intent (household name or invitation code) is now collected first; name is always the final step. Step type updated: `welcome → household/invite-code → name`. `handleHouseholdStepContinue` introduced as the intermediate handler advancing from household intent to name. Back navigation updated throughout.
+* **Action (Bug 11)**: Added a mount-time `useEffect` in `OnboardingFlow` that calls `getUserByEmail` immediately on render. If `InvitationStatus === 'Pending'`, it calls `getHouseholdsForUser` to retrieve the household name, sets `invitedHouseholdName` state, forces `mode = 'member'`, and navigates directly to `invite-code` — all before the welcome screen is visible.
+* **Action**: Added `checkingInvite` boolean state (starts `true`). A full-screen `ActivityIndicator` is shown while the mount check runs, preventing any flash of the welcome screen before the redirect fires.
+* **Action**: Personalised subtitle on invite-code screen: *"You've been invited to join [HouseholdName] — enter your code to continue."* Back button hidden for hard-routed invited users.
+* **Action**: Invalid invitation code entered at the name step bounces the user back to `invite-code` with a clear error message rather than failing silently on the final screen.
+* **Architectural Rule**: Any onboarding flow that has conditional routing based on user state must perform that check at mount time, not on user interaction. Interaction-time checks create a race condition where the UI renders before the check resolves.
+* **Files changed**: `OnboardingFlow.tsx` v4.0.0 → v5.1.0.
+* **Verified**: Verified on device, 5 March 2026.
+
+* **Milestone**: Project Focus Shift — App Store Readiness.
+* **Decision**: After a meeting between Jarques and Dan, the project focus shifted from general bug fixes to a prioritised App Store readiness list. Items are fixed in the agreed order and not reordered. Priority list: (1) Android real-time sync, (2) Native push notifications, (3) Ask to feed targeting, (4) Reminders, (5) Notification toggle per member, (6) T&C, (7) How to section, (8) Support/feedback link, (9) Supabase RLS, (10) View History padding fix.
+
 ---
 
 ## Unresolved Technical Debt & Architectural Decisions
@@ -409,9 +425,8 @@
 * **The Decision**: Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) only fire if the target table is added to the `supabase_realtime` publication in the Supabase Dashboard → Database → Replication.
 * **The Risk**: This is a silent failure. No errors are thrown, no logs are emitted — the subscription simply never fires. Any new table that needs real-time subscriptions must be added to the publication before the subscription code will work. Currently enabled tables: `pets`, `feeding_events`, `households`, `user_households`, `notifications`.
 
-**19. Invited User Onboarding Path Not Guarded (UX/Logic Debt)**
-* **The Issue**: When a user arrives via the claim-invite flow, the onboarding welcome screen still presents both "Create Household" and "Join Household" as equal options. An invited user who taps "Create Household" ends up with a spurious extra household in addition to being linked to the invited household — because `createUserHousehold` idempotency means the invite link is preserved, but a new household is also created.
-* **The Risk**: The user ends up with an unexpected extra household visible in Settings. The fix requires detecting the invited user state (e.g. `InvitationStatus === 'Pending'` on the DB user record at the start of onboarding) and either routing them directly to the Join path or showing a clear warning before allowing Create.
+**19. ~~Invited User Onboarding Path Not Guarded~~ (RESOLVED — 5 March 2026)**
+* **Resolution**: Mount-time `useEffect` in `OnboardingFlow` detects `InvitationStatus === 'Pending'` and hard-routes to `invite-code` before the welcome screen renders. `checkingInvite` spinner prevents any flash. Spurious extra household bug eliminated. `OnboardingFlow.tsx` v5.1.0.
 
 **20. Self-Notification on Household Creation (UX Debt)**
 * **The Issue**: When a user creates a new household, a `member_joined` or `household_created` notification is inserted and appears in their own NotificationsPanel and bell badge. The creator is notifying themselves of an action they just performed.

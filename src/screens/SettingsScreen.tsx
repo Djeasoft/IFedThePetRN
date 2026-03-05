@@ -1609,6 +1609,13 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                   Version 1.0.0
                 </Text>
               </View>
+
+              {/* feedback/email */}
+              <View style={styles.versionContainer}>
+                <Text style={[styles.versionText, { color: theme.textTertiary }]}>
+                  feedback@ifedthepet.app
+                </Text>
+              </View>
             </>
           )}
         </ScrollView>
