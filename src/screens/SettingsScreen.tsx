@@ -14,6 +14,7 @@
 // Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser` + 'handleRemoveMember' fixed
 // Version: 3.8.0 - Bug 18: Call onHouseholdNameChange and onPetsChange callbacks so App.tsx can push updates to StatusScreen
 // Version: 3.9.0 - Priority #3: Targeted feed requests — pass targetUserId and senderUserId so only sender and target see the notification
+// Version: 3.10.0 - Priority #8: Replace plain feedback email text with tappable "Give your feedback" link (mailto)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -272,15 +273,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
     if (!editingMemberId || !memberNameInput.trim()) return;
 
     try {
-      
+
       // UPDATE DATABASE 
       await updateUser(editingMemberId, { MemberName: memberNameInput.trim() });
-      
+
       // Keep Account section in sync when user edits their own name
       if (editingMemberId === currentUser?.UserID) {
         setCurrentUser((prev) => prev ? { ...prev, MemberName: memberNameInput.trim() } : prev);
       }
-      
+
       // Keep Members section in sync when user edits their own name
       setMembers((prev) =>
         prev.map((m) =>
@@ -1612,13 +1613,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                 <Text style={[styles.versionText, { color: theme.textTertiary }]}>
                   Version 1.0.0
                 </Text>
-              </View>
 
-              {/* feedback/email */}
-              <View style={styles.versionContainer}>
-                <Text style={[styles.versionText, { color: theme.textTertiary }]}>
-                  feedback@ifedthepet.app
-                </Text>
+                {/* Give your feedback */}
+                <TouchableOpacity
+                  onPress={() => Linking.openURL('mailto:feedback@ifedthepet.app')}
+                >
+                  <Text style={[styles.feedbackLink, { color: theme.textTertiary }]}>
+                    Give your feedback
+                  </Text>
+                </TouchableOpacity>
               </View>
             </>
           )}
@@ -2420,6 +2423,10 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: fontSize.sm,
+  },
+  feedbackLink: {
+    fontSize: fontSize.sm,
+    textDecorationLine: 'underline',
   },
 
   // Accordion styles
