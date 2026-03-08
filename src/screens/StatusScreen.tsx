@@ -13,6 +13,8 @@
 // Version: 3.9.0 - Bug 18: React to household name + pet list changes pushed from SettingsScreen via App.tsx props so the notification subscription is never torn down by loadData() re-renders, ensuring feed_request and other standalone notifications also update the bell badge in real-time
 // Version: 3.10.0 - Fix: Android safe area top inset applied to header (I6)
 // Version: 3.10.1 - Logo on StatusScreen: Centered and increased size
+// Version: 3.10.2 - Priority #10: Redesign history modal cards to match Dan's Figma — single-column card layout, pet names wrap freely, time+timeago on top row
+// Version: 3.10.3 - iOS card shadow fix: stronger shadowOpacity/shadowRadius + iOS-only hairline border for card definition
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -24,6 +26,7 @@ import {
   Image,
   Alert,
   Modal,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -909,7 +912,10 @@ export function StyledStatusScreen({
           <View style={[styles.modalContainer, { backgroundColor: theme.background, paddingTop: insets.top }]}>
             {/* Modal Header */}
             <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Feeding History</Text>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Feed History</Text>
+                <Text style={[styles.modalSubtitle, { color: theme.textTertiary }]}>Last 30 days</Text>
+              </View>
               <TouchableOpacity
                 onPress={() => setShowHistoryModal(false)}
                 style={styles.modalCloseButton}
@@ -935,23 +941,24 @@ export function StyledStatusScreen({
                         {formatDateHeader(eventDate)}
                       </Text>
                     )}
-                    <View style={[styles.modalHistoryItem, { borderBottomColor: theme.border }]}>
-                      <View style={styles.modalHistoryItemLeft}>
+                    <View style={[styles.modalHistoryCard, { backgroundColor: theme.surface }]}>
+                      {/* Top row: time + time ago */}
+                      <View style={styles.modalHistoryCardTopRow}>
                         <Text style={[styles.modalHistoryTime, { color: theme.text }]}>
                           {formatTime(eventDate.getTime())}
-                        </Text>
-                        <Text style={[styles.modalHistoryFedBy, { color: theme.textSecondary }]}>
-                          Fed by {item.userName}
-                        </Text>
-                      </View>
-                      <View style={styles.modalHistoryItemRight}>
-                        <Text style={[styles.modalHistoryPets, { color: theme.text }]}>
-                          {item.petNames.join(', ')}
                         </Text>
                         <Text style={[styles.modalHistoryTimeAgo, { color: theme.textTertiary }]}>
                           {getTimeAgo(eventDate.getTime())}
                         </Text>
                       </View>
+                      {/* Pet names — wraps freely */}
+                      <Text style={[styles.modalHistoryPets, { color: theme.text }]}>
+                        {item.petNames.join(', ')}
+                      </Text>
+                      {/* Fed by */}
+                      <Text style={[styles.modalHistoryFedBy, { color: theme.textSecondary }]}>
+                        Fed by {item.userName}
+                      </Text>
                     </View>
                   </View>
                 );
@@ -1309,32 +1316,46 @@ const styles = StyleSheet.create({
     marginTop: 24,
     marginBottom: 12,
   },
-  modalHistoryItem: {
+  modalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalHistoryCard: {
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 1, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 1,
+    elevation: 2,
+    ...Platform.select({
+      ios: {
+        borderWidth: 0.4,
+        borderColor: 'rgba(0, 0, 0, 0.1)',
+      },
+    }),
+  },
+  modalHistoryCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  modalHistoryItemLeft: {
-    flex: 1,
-  },
-  modalHistoryItemRight: {
-    alignItems: 'flex-end',
+    alignItems: 'baseline',
+    marginBottom: 4,
   },
   modalHistoryTime: {
     fontSize: 16,
     fontWeight: '600',
   },
-  modalHistoryFedBy: {
-    fontSize: 12,
-    marginTop: 2,
-  },
   modalHistoryPets: {
     fontSize: 14,
     fontWeight: '500',
+    marginBottom: 4,
+    lineHeight: 20,
+  },
+  modalHistoryFedBy: {
+    fontSize: 12,
   },
   modalHistoryTimeAgo: {
     fontSize: 12,
-    marginTop: 2,
   },
 });

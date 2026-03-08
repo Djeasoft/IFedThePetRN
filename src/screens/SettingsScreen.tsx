@@ -15,6 +15,7 @@
 // Version: 3.8.0 - Bug 18: Call onHouseholdNameChange and onPetsChange callbacks so App.tsx can push updates to StatusScreen
 // Version: 3.9.0 - Priority #3: Targeted feed requests — pass targetUserId and senderUserId so only sender and target see the notification
 // Version: 3.10.0 - Priority #8: Replace plain feedback email text with tappable "Give your feedback" link (mailto)
+// Version: 3.11.0 - Merge Invitation Code into Household card (divider + row at bottom, isMainMember guard)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -915,6 +916,37 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     )}
                   </View>
                 )}
+
+                {/* Invitation Code — main member only */}
+                {isMainMember && household && (
+                  <>
+                    <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                    <View style={styles.inviteCodeInner}>
+                      <Text style={[styles.inviteCodeLabel, { color: theme.textSecondary }]}>
+                        Invitation Code
+                      </Text>
+                      <View style={styles.inviteCodeRow}>
+                        <Text style={[styles.inviteCode, { color: theme.text }]}>
+                          {household.InvitationCode}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={handleCopyInviteCode}
+                          style={[styles.copyButton, { backgroundColor: theme.primaryLight }]}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={codeCopied ? 'checkmark' : 'copy'}
+                            size={16}
+                            color="white"
+                          />
+                          <Text style={styles.copyButtonText}>
+                            {codeCopied ? 'Copied!' : 'Copy'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </>
+                )}
               </View>
 
               {/* Members Section */}
@@ -1061,34 +1093,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                   Free tier limited to {TIER_LIMITS.FREE.membersPerHousehold} members.
                   Upgrade to Pro for unlimited members.
                 </Text>
-              )}
-
-              {/* Invitation Code */}
-              {isMainMember && household && (
-                <View style={[styles.inviteCodeCard, { backgroundColor: theme.surface }]}>
-                  <Text style={[styles.inviteCodeLabel, { color: theme.textSecondary }]}>
-                    Invitation Code
-                  </Text>
-                  <View style={styles.inviteCodeRow}>
-                    <Text style={[styles.inviteCode, { color: theme.text }]}>
-                      {household.InvitationCode}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={handleCopyInviteCode}
-                      style={[styles.copyButton, { backgroundColor: theme.primaryLight }]}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name={codeCopied ? 'checkmark' : 'copy'}
-                        size={16}
-                        color="white"
-                      />
-                      <Text style={styles.copyButtonText}>
-                        {codeCopied ? 'Copied!' : 'Copy'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
               )}
 
               {/* Pets Section */}
@@ -2163,11 +2167,8 @@ const styles = StyleSheet.create({
   },
 
   // Invite code card
-  inviteCodeCard: {
-    marginHorizontal: spacing.base,
-    marginTop: spacing.md,
+  inviteCodeInner: {
     padding: spacing.base,
-    borderRadius: borderRadius.lg,
   },
   inviteCodeLabel: {
     fontSize: fontSize.sm,
