@@ -350,6 +350,20 @@
 
 ---
 
+### 5 March 2026 — Evening Session
+
+* **Milestone**: App Store Priority #3 — "Ask to Feed" Now Targets a Specific Member Only.
+* **Problem**: The "Ask member to feed" notification broadcast to every member of the household. The sender selected a specific person to ask, but all household members received and could see the notification — creating noise and removing the sense of personal accountability.
+* **Architecture Decision**: Added `target_user_id` and `sender_user_id` as nullable UUID columns to the `notifications` table. A visibility filter was applied in `getAllNotifications` and `getUnreadNotificationsCount` so that `feed_request` notifications are only visible to the sender and the specific target member. All other notification types remain household-wide and are unaffected.
+* **Action**: SQL migration run in Supabase Dashboard adding `target_user_id UUID` and `sender_user_id UUID` nullable columns to the `notifications` table.
+* **Action**: `types.ts` updated to v1.2.0 — `TargetUserID` and `SenderUserID` optional fields added to the `Notification` interface.
+* **Action**: `database.ts` updated to v4.2.0 — `mapNotification` updated to map the two new fields; `addNotification` updated to accept and persist `targetUserId` and `senderUserId`; `getAllNotifications` and `getUnreadNotificationsCount` updated with a consistent visibility filter: for `feed_request` type, only return the notification if the current user is the sender or the target.
+* **Action**: `SettingsScreen.tsx` updated to v3.9.0 — `addNotification` call now passes `targetUserId` (the selected member's UserID) and `senderUserId` (the current user's UserID).
+* **Architectural Rule**: The visibility filter for targeted notifications must be applied consistently in both `getAllNotifications` and `getUnreadNotificationsCount`. If one is updated, the other must be updated too — failure to keep them in sync causes the badge count and the panel to show different numbers (same rule as the join-date filter).
+* **Files changed**: `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.8.0 → v3.9.0. SQL migration applied to Supabase.
+
+---
+
 ## Unresolved Technical Debt & Architectural Decisions
 
 ### Categorized Debt & Ghost Logic
@@ -417,9 +431,8 @@
 * **The Decision**: A 2-minute undo window was established for the feeding flow, tracked via an `undo_deadline` timestamp, and Pro subscriptions were scoped strictly to the Household level (`households.is_pro`).
 * **The Risk**: If the undo window is only validated on the client side, users with skewed device clocks could bypass the restriction. Additionally, household-level subscription tier limits must be strictly enforced on the server side via Supabase functions or RLS policies, rather than solely hidden in the React Native UI.
 
-**17. Feed Request Enhancement Backlog (Feature Debt)**
-* **The Issue**: The "Ask member to feed" notification currently broadcasts to the entire household. It does not support targeting a specific member or selecting which pet(s) need feeding.
-* **The Risk**: As the app scales, users may find household-wide broadcasts noisy. Per-member targeting and pet selection should be added in a future iteration. The `notifications` table already has `member_name` and `requested_by` columns to support this.
+**17. ~~Feed Request Household-Wide Broadcast~~ (RESOLVED — 5 March 2026)**
+* **Resolution**: `feed_request` notifications now target a specific member only. `target_user_id` and `sender_user_id` columns added to `notifications` table. Visibility filter applied in `getAllNotifications` and `getUnreadNotificationsCount` — only the sender and target see the notification. Per-pet targeting (which pet needs feeding) remains a future enhancement.
 
 **18. Supabase Replication Must Be Explicitly Enabled Per Table (Infrastructure Rule)**
 * **The Decision**: Supabase real-time subscriptions (`supabase.channel().on('postgres_changes', ...)`) only fire if the target table is added to the `supabase_realtime` publication in the Supabase Dashboard → Database → Replication.

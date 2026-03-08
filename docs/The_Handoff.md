@@ -1,6 +1,6 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Thursday, 5 March 2026
-**Updated By:** Jarques + Claude (session sign-off)
+**Last Updated:** Sunday, 8 March 2026
+**Updated By:** Jarques + Claude (gap analysis sign-off)
 **Next Session:** Pick up from WHAT'S NEXT — Bug 14 (Android real-time sync) is highest priority.
 
 ---
@@ -63,6 +63,7 @@ What is verified and working:
 - Onboarding step order swapped: household intent first, name last (both paths) ✅ *(fixed 5 Mar)*
 - Invited users auto-routed to invite-code screen on OnboardingFlow mount — welcome screen never shown ✅ *(fixed 5 Mar)*
 - Personalised subtitle on invite-code screen: "You've been invited to join [HouseholdName]" ✅ *(fixed 5 Mar)*
+- "Ask member to feed" now sends to specific target member only — other household members do not see it ✅ *(fixed 5 Mar, evening)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -79,7 +80,7 @@ What is **not** working:
 |---|------|----------|-------|
 | 1 | Android real-time sync failure | 🔴 Major | Android fails to reflect state changes from other devices. iOS updates instantly, Android stays stale. Check WebSocket listener and pet sync on Android. |
 | 2 | Native phone notifications | 🔴 Major | Setup push notifications for when the phone is locked |
-| 3 | Ask to feed — target specific member | 🔴 Major | Currently broadcasts to entire household. Only send to the person being asked |
+| 3 | ~~Ask to feed — target specific member~~ | ✅ Done | `target_user_id` + `sender_user_id` columns added. Visibility filter in `getAllNotifications` + `getUnreadNotificationsCount`. Only sender and target see the notification. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0 |
 | 4 | Reminders | 🔴 Major | Add functionality for feeding reminders (e.g. feed pet at 7pm). Reference Dan's Figma general time design |
 | 5 | Reminders — notification toggle per member | 🔴 Major | Notification toggle is gone — re-add |
 | 6 | T&C | 🔴 Major | Add views for Terms & Conditions and Privacy Policy. Worked in React Web Figma |
@@ -142,7 +143,8 @@ What is **not** working:
 *Work through App Store Priority List in order. Do not skip ahead.*
 
 - [x] **Bug 11 + I13** — Onboarding guard + step reorder. `OnboardingFlow.tsx` v5.1.0. Verified 5 Mar.
-- [ ] **#1** — Bug 14: Android real-time sync failure
+- [x] **#3** — Ask to feed: target specific member only. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. 5 Mar evening.
+- [ ] **#1** — Bug 14: Android real-time sync failure ← START HERE
 - [ ] **#2** — Native push notifications (locked screen)
 - [ ] **#3** — Ask to feed: target specific member only
 - [ ] **#4** — Reminders (feeding time alerts)
@@ -205,6 +207,7 @@ What is **not** working:
 - Logo centring rule → logo uses `position: 'absolute'` with `left: 0, right: 0` so it centres on true screen width.
 - Onboarding step order (v5.1.0) → both paths: household intent first, name last. Invited users skip welcome entirely via mount-time check.
 - Bug classification → three tiers: Blocker Bug (stops the process), Bug (wrong but not blocking), Enhancement (improvement to correctly working feature).
+- Targeted notification visibility rule → `feed_request` notifications carry `target_user_id` and `sender_user_id`. Both `getAllNotifications` and `getUnreadNotificationsCount` apply the same visibility filter: show only if current user is sender or target. All other notification types remain household-wide. If one function is updated, the other must be updated too.
 
 **Key naming to know:**
 - `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
@@ -216,11 +219,12 @@ What is **not** working:
 **Current file versions:**
 - `App.tsx` v3.10.0
 - `StatusScreen.tsx` v3.10.1
-- `SettingsScreen.tsx` v3.8.0
+- `SettingsScreen.tsx` v3.9.0 (targeted feed request — `targetUserId` + `senderUserId` passed to `addNotification`)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (Bug 11 + I13: mount-time invited user guard, step reorder)
-- `database.ts` — `getMembersOfHousehold` orders by `user_households.created_at` ASC; `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; `getAllNotifications()` and `getUnreadNotificationsCount()` apply join-date filter
+- `types.ts` v1.2.0 (`TargetUserID` and `SenderUserID` optional fields added to `Notification` interface)
+- `database.ts` v4.2.0 — `mapNotification` maps new fields; `addNotification` persists `targetUserId`/`senderUserId`; `getAllNotifications` + `getUnreadNotificationsCount` apply targeted visibility filter for `feed_request` type; `getMembersOfHousehold` orders by `user_households.created_at` ASC; `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; join-date filter on all notification queries
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`
