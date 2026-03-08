@@ -1,6 +1,6 @@
 # I Fed The Pet (IFTP) — The Handoff
 **Last Updated:** Sunday, 8 March 2026
-**Updated By:** Jarques + Claude (gap analysis sign-off)
+**Updated By:** Jarques + Claude (session sign-off)
 **Next Session:** Pick up from WHAT'S NEXT — Bug 14 (Android real-time sync) is highest priority.
 
 ---
@@ -64,11 +64,15 @@ What is verified and working:
 - Invited users auto-routed to invite-code screen on OnboardingFlow mount — welcome screen never shown ✅ *(fixed 5 Mar)*
 - Personalised subtitle on invite-code screen: "You've been invited to join [HouseholdName]" ✅ *(fixed 5 Mar)*
 - "Ask member to feed" now sends to specific target member only — other household members do not see it ✅ *(fixed 5 Mar, evening)*
+- "Give your feedback" tappable mailto link added to Settings footer ✅ *(8 Mar)*
+- Feed History modal redesigned: single-column cards matching Dan's Figma, pet names wrap freely, no layout breakage with many pets ✅ *(8 Mar)*
+- Feed History card shadow fixed on iOS — stronger shadow + hairline border via Platform.select ✅ *(8 Mar)*
+- Invitation Code merged into Household card — divider + row, main member only, matches Account card pattern ✅ *(8 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb. Android safe area + logo fixes verified on real Android device, 5 Mar. Bug 11 + I13 verified 5 Mar.
+**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb. Android safe area + logo fixes verified on real Android device, 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar.
 
 ---
 
@@ -85,9 +89,9 @@ What is **not** working:
 | 5 | Reminders — notification toggle per member | 🔴 Major | Notification toggle is gone — re-add |
 | 6 | T&C | 🔴 Major | Add views for Terms & Conditions and Privacy Policy. Worked in React Web Figma |
 | 7 | How to section | 🔴 Major | Needs to be updated |
-| 8 | Support on Settings | 🔴 Major | Add "Give your feedback" text under Version, linking to `mailto:feedback@ifedthepet.app` |
+| 8 | ~~Support on Settings~~ | ✅ Done | "Give your feedback" tappable mailto link added to Settings footer. `SettingsScreen.tsx` v3.10.0 |
 | 9 | Supabase RLS | 🔴 Major | Must fix before go live — unrestricted DB access via anon key currently |
-| 10 | View History screen | 🔴 Major | Feeding event cards lose time and "fed by" text when there are many pets — padding issue |
+| 10 | ~~View History screen~~ | ✅ Done | Feed History modal redesigned to match Dan's Figma — single-column cards, pet names wrap freely. iOS shadow fixed via Platform.select. `StatusScreen.tsx` v3.10.3 |
 | I11 | Adding a new household | 🟡 Medium | Household island button to add a new household via invitation code (e.g. pet sitter scenario) |
 
 ---
@@ -144,16 +148,16 @@ What is **not** working:
 
 - [x] **Bug 11 + I13** — Onboarding guard + step reorder. `OnboardingFlow.tsx` v5.1.0. Verified 5 Mar.
 - [x] **#3** — Ask to feed: target specific member only. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. 5 Mar evening.
+- [x] **#8** — Feedback link in Settings. `SettingsScreen.tsx` v3.10.0. 8 Mar.
+- [x] **#10** — Feed History modal redesign + iOS shadow fix. `StatusScreen.tsx` v3.10.3. 8 Mar.
+- [x] **UX** — Invitation Code merged into Household card. `SettingsScreen.tsx` v3.11.0. 8 Mar.
 - [ ] **#1** — Bug 14: Android real-time sync failure ← START HERE
 - [ ] **#2** — Native push notifications (locked screen)
-- [ ] **#3** — Ask to feed: target specific member only
 - [ ] **#4** — Reminders (feeding time alerts)
 - [ ] **#5** — Notification toggle per member — re-add
 - [ ] **#6** — T&C and Privacy Policy views
 - [ ] **#7** — How to section update
-- [ ] **#8** — Feedback link in Settings
 - [ ] **#9** — Supabase RLS
-- [ ] **#10** — View History screen padding fix
 - [ ] **Phase B:** Apple/Google OAuth, React Navigation, component extraction, production build prep
 
 ---
@@ -218,8 +222,8 @@ What is **not** working:
 
 **Current file versions:**
 - `App.tsx` v3.10.0
-- `StatusScreen.tsx` v3.10.1
-- `SettingsScreen.tsx` v3.9.0 (targeted feed request — `targetUserId` + `senderUserId` passed to `addNotification`)
+- `StatusScreen.tsx` v3.10.3 (Feed History modal redesign + iOS card shadow fix)
+- `SettingsScreen.tsx` v3.11.0 (feedback mailto link, Invitation Code merged into Household card)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (Bug 11 + I13: mount-time invited user guard, step reorder)

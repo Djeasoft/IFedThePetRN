@@ -364,7 +364,30 @@
 
 ---
 
-## Unresolved Technical Debt & Architectural Decisions
+### 8 March 2026
+
+* **Milestone**: App Store Priority #8 — "Give your feedback" link added to Settings footer.
+* **Action**: Replaced the plain static `feedback@ifedthepet.app` text in the Settings footer with a tappable `TouchableOpacity` that calls `Linking.openURL('mailto:feedback@ifedthepet.app')`. The link is underlined to signal interactivity. Jarques refined the layout — both the Version number and the feedback link now sit inside the same `versionContainer` block rather than two separate containers. `Linking` was already imported — no new dependencies.
+* **Files changed**: `SettingsScreen.tsx` v3.9.0 → v3.10.0.
+
+* **Milestone**: App Store Priority #10 — Feed History Modal Redesigned to Match Dan's Figma.
+* **Problem**: The history modal used a two-column `flexDirection: 'row'` layout — time + "Fed by" on the left, pet names + time ago on the right. `modalHistoryItemRight` had no `flex` or `maxWidth` constraint, so with many pets (8+) the right column expanded greedily, collapsing the left column and producing a broken multi-line block with missing time and "Fed by" text.
+* **Action**: Replaced the two-column row layout with a single-column card per event, matching Dan's Figma design. Each card contains: (1) top row — time bold-left + time ago right, using `flexDirection: 'row'` + `justifyContent: 'space-between'`; (2) pet names below, left-aligned, wrapping freely with no constraints; (3) "Fed by [name]" at the bottom in small tertiary colour. Border-bottom dividers replaced with card `marginBottom` gap. Cards have `borderRadius: 12`, `backgroundColor: theme.surface`, and shadow/elevation.
+* **Action**: Modal title updated from "Feeding History" to "Feed History" to match Dan's design. "Last 30 days" subtitle added below the title.
+* **Files changed**: `StatusScreen.tsx` v3.10.1 → v3.10.2.
+* **Verified**: Tested on iOS (iPhone 16 Pro) and Android simultaneously, 8 March 2026.
+
+* **Milestone**: iOS History Card Shadow Fix.
+* **Problem**: On iOS (iPhone 16 Pro), the Feed History cards were barely distinguishable from the background — the shadow was almost invisible. On Android, `elevation: 2` produced clean, visible card separation. The discrepancy was caused by `shadowOpacity: 0.05` being too subtle when the card `backgroundColor` (`theme.surface`) is close to the screen `backgroundColor` (`theme.background`).
+* **Action**: Strengthened iOS shadow: `shadowOffset: { width: 1, height: 1 }`, `shadowOpacity: 0.15`, `shadowRadius: 1`. Added an iOS-only hairline border via `Platform.select({ ios: { borderWidth: 0.4, borderColor: 'rgba(0,0,0,0.1)' } })` to give cards visual definition independent of shadow contrast. `Platform` was already imported — no new dependencies. Android `elevation` unchanged.
+* **Files changed**: `StatusScreen.tsx` v3.10.2 → v3.10.3.
+* **Verified**: Jarques fine-tuned shadow values on device. Confirmed cards visually distinct on iOS and Android.
+
+* **Milestone**: Invitation Code Merged into Household Card.
+* **Problem**: The Invitation Code sat as a separate standalone card below the Household card, visually disconnected from the household it belonged to. The pattern was inconsistent with the Account card which groups related rows (name, email, Sign Out) inside a single card.
+* **Action**: Removed the standalone `inviteCodeCard` container. Moved the Invitation Code content (label, code text, Copy button) inside the Household `card` View, separated by a `divider`. `isMainMember && household` guard preserved — non-main members see the Household card without the invite code row. `inviteCodeCard` style removed; replaced with `inviteCodeInner` (padding only — the parent card provides borderRadius and backgroundColor).
+* **Architectural Rule**: Related settings that belong to the same entity (household name, switcher, invite code) should be grouped in a single card. Use `divider` rows to separate logical sub-sections within a card, consistent with the Account card pattern.
+* **Files changed**: `SettingsScreen.tsx` v3.10.0 → v3.11.0.
 
 ### Categorized Debt & Ghost Logic
 
