@@ -6,6 +6,7 @@
 // Version: 4.0.0 - Multi-Household Switcher Implementation
 // Version: 4.0.0 - Fetch the user's join date to exclude pre-join notifications from the count
 // Version: 4.1.0 - Sort members: main member first, then active by Creation Date + removeUserFromHousehold count added
+// Version: 4.2.0 - Targeted feed requests: targetUserId + senderUserId columns mapped; visibility filter applied in getAllNotifications and getUnreadNotificationsCount
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -710,6 +711,9 @@ const mapNotification = (data: any, isRead: boolean): Notification => ({
   petName: data.pet_name ?? undefined,
   memberName: data.member_name ?? undefined,
   requestedBy: data.requested_by ?? undefined,
+  // Targeted feed request fields — null in DB maps to undefined here
+  targetUserId: data.target_user_id ?? undefined,
+  senderUserId: data.sender_user_id ?? undefined,
 });
 
 export async function getAllNotifications(householdId: string, userId: string): Promise<Notification[]> {
@@ -744,8 +748,18 @@ export async function getAllNotifications(householdId: string, userId: string): 
     }
     if (!notifications?.length) return [];
 
+    // Visibility filter: if a notification is targeted (target_user_id is set),
+    // only the target and the sender should see it. Household-wide notifications
+    // (target_user_id is null) are visible to everyone as before.
+    const visibleNotifications = notifications.filter((n: any) => {
+      if (!n.target_user_id) return true; // Household-wide — always visible
+      return n.target_user_id === userId || n.sender_user_id === userId;
+    });
+
+    if (!visibleNotifications.length) return [];
+
     // Query 2: Get which of these the current user has read
-    const notifIds = notifications.map((n: any) => n.id);
+    const notifIds = visibleNotifications.map((n: any) => n.id);
     const { data: reads, error: readsError } = await supabase
       .from('notification_reads')
       .select('notification_id')
@@ -759,7 +773,7 @@ export async function getAllNotifications(householdId: string, userId: string): 
     // Build a set of read notification IDs for fast lookup
     const readIds = new Set((reads || []).map((r: any) => r.notification_id));
 
-    return notifications.map((row: any) => mapNotification(row, readIds.has(row.id)));
+    return visibleNotifications.map((row: any) => mapNotification(row, readIds.has(row.id)));
   } catch (error) {
     console.error('Error in getAllNotifications:', error);
     return [];
@@ -776,6 +790,9 @@ export async function addNotification(notification: Omit<Notification, 'id' | 't
     if (notification.petName) insertData.pet_name = notification.petName;
     if (notification.memberName) insertData.member_name = notification.memberName;
     if (notification.requestedBy) insertData.requested_by = notification.requestedBy;
+    // Targeted feed request columns — only written when provided
+    if (notification.targetUserId) insertData.target_user_id = notification.targetUserId;
+    if (notification.senderUserId) insertData.sender_user_id = notification.senderUserId;
 
     const { data, error } = await supabase
       .from('notifications')
@@ -807,10 +824,11 @@ export async function getUnreadNotificationsCount(householdId: string, userId: s
 
     const joinDate = membership?.created_at ?? null;
 
-    // Query 1: Get notification IDs for this household, filtered to after the user joined
+    // Query 1: Get notifications for this household, filtered to after the user joined.
+    // Select target/sender columns so we can apply the same visibility filter as getAllNotifications.
     let notifQuery = supabase
       .from('notifications')
-      .select('id')
+      .select('id, target_user_id, sender_user_id')
       .eq('household_id', householdId);
 
     if (joinDate) {
@@ -825,8 +843,17 @@ export async function getUnreadNotificationsCount(householdId: string, userId: s
     }
     if (!notifications?.length) return 0;
 
-    // Query 2: Get which of these the user has read
-    const notificationIds = notifications.map((n: any) => n.id);
+    // Visibility filter: match the same rule as getAllNotifications so badge and panel always agree.
+    // Targeted notifications (target_user_id set) are only visible to the target and sender.
+    const visibleNotifications = notifications.filter((n: any) => {
+      if (!n.target_user_id) return true;
+      return n.target_user_id === userId || n.sender_user_id === userId;
+    });
+
+    if (!visibleNotifications.length) return 0;
+
+    // Query 2: Get which of the visible notifications the user has read
+    const notificationIds = visibleNotifications.map((n: any) => n.id);
     const { data: reads, error: readsError } = await supabase
       .from('notification_reads')
       .select('notification_id')
@@ -835,10 +862,10 @@ export async function getUnreadNotificationsCount(householdId: string, userId: s
 
     if (readsError) {
       console.error('Error fetching read status:', readsError.message);
-      return notifications.length; // Assume all unread on error
+      return visibleNotifications.length; // Assume all unread on error
     }
 
-    return notifications.length - (reads?.length ?? 0);
+    return visibleNotifications.length - (reads?.length ?? 0);
   } catch (error) {
     console.error('Error in getUnreadNotificationsCount:', error);
     return 0;

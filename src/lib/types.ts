@@ -1,5 +1,6 @@
 // Data types based on ERD specification
 // Version: 1.1.0 - Updated with Supabase history fields
+// Version: 1.2.0 - Notification: added targetUserId and senderUserId for targeted feed requests
 
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
@@ -65,6 +66,9 @@ export interface Notification {
   petName?: string;
   memberName?: string;
   requestedBy?: string;
+  // Targeted feed requests — null means household-wide broadcast
+  targetUserId?: string;
+  senderUserId?: string;
 }
 
 // Updated FeedingEvent to match Supabase schema

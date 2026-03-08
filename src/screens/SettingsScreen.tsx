@@ -13,6 +13,7 @@
 // Version: 3.7.2 - Sort members: main member first, then active, then pending
 // Version: 3.7.3 - Invite spinner + name field removed + account pencil + members pencil removed + `handleSaveMemberName` updates `currentUser` + 'handleRemoveMember' fixed
 // Version: 3.8.0 - Bug 18: Call onHouseholdNameChange and onPetsChange callbacks so App.tsx can push updates to StatusScreen
+// Version: 3.9.0 - Priority #3: Targeted feed requests — pass targetUserId and senderUserId so only sender and target see the notification
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -991,6 +992,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                                   message: `${currentUser!.MemberName} asked ${member.MemberName} to feed the pet(s)`,
                                   memberName: member.MemberName,
                                   requestedBy: currentUser!.MemberName,
+                                  // Targeting: only the recipient and sender will see this notification
+                                  targetUserId: member.UserID,
+                                  senderUserId: currentUser!.UserID,
                                 });
                                 Alert.alert(
                                   'Request Sent',
