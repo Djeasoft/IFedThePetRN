@@ -15,6 +15,11 @@
 // Version: 3.10.1 - Logo on StatusScreen: Centered and increased size
 // Version: 3.10.2 - Priority #10: Redesign history modal cards to match Dan's Figma — single-column card layout, pet names wrap freely, time+timeago on top row
 // Version: 3.10.3 - iOS card shadow fix: stronger shadowOpacity/shadowRadius + iOS-only hairline border for card definition
+// Version: 3.10.4 - Fix: move suppressNextRealtimeLoad + suppressNextNotificationSound refs before Supabase write in handleFeedClick and handleUndo to eliminate own-device flicker/revert race condition
+// Version: 3.10.5 - Fix: suppressNextRealtimeLoad changed from boolean to counter — each feed/undo generates N+1 broadcasts (N pets + 1 feeding_events), boolean was cleared on first broadcast leaving the rest unsuppressed
+// Version: 3.10.6 - Fix: remove premature finally counter reset; add 5s safety timeout; unique Supabase channel names in database.ts
+// Version: 3.10.7 - Fix: replace counter-based suppression with timestamp window (suppressUntilRef) — eliminates broadcast-count dependency, no timer infrastructure needed, cross-device updates always pass through after 3s window
+// Version: 3.10.6 - Fix: remove premature finally counter reset (broadcasts arrive after finally on high-latency networks); add 5s safety timeout instead. Fix non-unique Supabase channel names in database.ts (status:pets/feeding_events scoped by householdId)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -134,7 +139,10 @@ export function StyledStatusScreen({
   const [historyEvents, setHistoryEvents] = useState<HistoryEventDetails[]>([]);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [isOperationInFlight, setIsOperationInFlight] = useState(false);
-  const suppressNextRealtimeLoad = useRef(false);
+  // Timestamp-based suppression: ignore own-device broadcasts until this time has passed.
+  // Set to Date.now() + 3000 on feed/undo. Any broadcast arriving before that time is an
+  // own-device echo and is skipped. Broadcasts from other devices arrive after the window.
+  const suppressUntilRef = useRef<number>(0);
 
   // Ref to suppress bell sound for own-device notification actions
   const suppressNextNotificationSound = useRef(false);
@@ -336,7 +344,9 @@ export function StyledStatusScreen({
       });
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   // Real-time listeners: household data changes + new notifications.
@@ -353,8 +363,8 @@ export function StyledStatusScreen({
 
     // Subscription 1: pets + feeding_events changes → full data reload
     const unsubscribeHousehold = subscribeToHouseholdChanges(activeHouseholdId, () => {
-      if (suppressNextRealtimeLoad.current) {
-        suppressNextRealtimeLoad.current = false;
+      if (Date.now() < suppressUntilRef.current) {
+        // Own-device echo — still within suppression window, skip
         return;
       }
       loadData();
@@ -504,14 +514,17 @@ export function StyledStatusScreen({
     };
 
     // --- APPLY: Update UI instantly ---
+    // Suppress own-device real-time echo for 3 seconds. Any broadcast arriving
+    // within this window is our own write reflecting back — skip it.
+    // Broadcasts from other devices arrive after this window and call loadData() normally.
+    suppressUntilRef.current = Date.now() + 3000;
+    suppressNextNotificationSound.current = true;
     setIsOperationInFlight(true);
     setPets(optimisticPets);
     setLatestEvent(optimisticEvent);
     setLatestEventDetails(optimisticDetails);
     setHistoryEvents([optimisticHistoryEntry, ...previousHistoryEvents].slice(0, 30));
     setUndoInfo({ canUndo: true, eventId: tempEventId });
-    suppressNextRealtimeLoad.current = true;
-    suppressNextNotificationSound.current = true;
 
     // --- SYNC: Push to Supabase in background ---
     try {
@@ -559,7 +572,7 @@ export function StyledStatusScreen({
       setLatestEventDetails(previousLatestEventDetails);
       setHistoryEvents(previousHistoryEvents);
       setUndoInfo(previousUndoInfo);
-      suppressNextRealtimeLoad.current = false;
+      suppressUntilRef.current = 0; // Write failed — no broadcasts will arrive, open immediately
       Alert.alert('Error', 'Failed to feed pets. Please try again.');
     } finally {
       setIsOperationInFlight(false);
@@ -600,13 +613,14 @@ export function StyledStatusScreen({
     const newLatest = optimisticHistory.length > 0 ? optimisticHistory[0] : null;
 
     // --- APPLY: Update UI instantly ---
+    // Suppress own-device echo for 3 seconds — same pattern as handleFeedClick.
+    suppressUntilRef.current = Date.now() + 3000;
     setIsOperationInFlight(true);
     setPets(optimisticPets);
     setLatestEvent(newLatest ? newLatest.event : null);
     setLatestEventDetails(newLatest ? { petNames: newLatest.petNames, userName: newLatest.userName } : null);
     setHistoryEvents(optimisticHistory);
     setUndoInfo({ canUndo: false });
-    suppressNextRealtimeLoad.current = true;
 
     // --- SYNC: Push to Supabase in background ---
     try {
@@ -619,7 +633,7 @@ export function StyledStatusScreen({
       setLatestEventDetails(previousLatestEventDetails);
       setHistoryEvents(previousHistoryEvents);
       setUndoInfo(previousUndoInfo);
-      suppressNextRealtimeLoad.current = false;
+      suppressUntilRef.current = 0; // Write failed — no broadcasts will arrive, open immediately
       Alert.alert('Error', 'Failed to undo feeding. Please try again.');
     } finally {
       setIsOperationInFlight(false);

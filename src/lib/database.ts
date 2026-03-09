@@ -1637,7 +1637,7 @@ export function subscribeToHouseholdChanges(
 ) {
   // 1. Setup the listener for the 'pets' table
   const petSubscription = supabase
-    .channel('public:pets')
+    .channel(`status:pets:${householdId}`)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'pets', filter: `household_id=eq.${householdId}` },
@@ -1650,7 +1650,7 @@ export function subscribeToHouseholdChanges(
 
   // 2. Setup the listener for the 'feeding_events' table
   const feedingSubscription = supabase
-    .channel('public:feeding_events')
+    .channel(`status:feeding_events:${householdId}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'feeding_events', filter: `household_id=eq.${householdId}` },
