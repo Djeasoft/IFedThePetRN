@@ -1,8 +1,8 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Sunday, 8 March 2026
+**Last Updated:** Monday, 9 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — Bug 14 (Android real-time sync) is highest priority.
-**Test**
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority.
+
 ---
 
 > **HOW TO USE THIS DOCUMENT**
@@ -30,7 +30,7 @@ What is verified and working:
 - Cross-device notifications ✅
 - 2-minute undo window
 - Pro tier toggle (pessimistic UI — awaits DB confirmation)
-- Multi-device sync suppression (suppressNextRealtimeLoad ref pattern)
+- Timestamp-based own-device echo suppression (`suppressUntilRef` — 3s window) ✅ *(fixed 9 Mar)*
 - Household-scoped notifications stored in Supabase
 - Read/unread notification state persisted per user per household
 - 30-day notification auto-cleanup
@@ -72,7 +72,7 @@ What is verified and working:
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb. Android safe area + logo fixes verified on real Android device, 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar.
+**Tested by:** Dan + Jamie (Henry) on 20 February 2026 via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Email invitations verified 27 Feb. Bug #10, #8, duplicate notification fixes verified by Jarques on device, 28 Feb. Android safe area + logo fixes verified on real Android device, 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar. Feed button flicker fix verified by Jarques on iPhone + Android, 9 Mar.
 
 ---
 
@@ -82,7 +82,7 @@ What is **not** working:
 
 | # | Item | Severity | Notes |
 |---|------|----------|-------|
-| 1 | Android real-time sync failure | 🔴 Major | Android fails to reflect state changes from other devices. iOS updates instantly, Android stays stale. Check WebSocket listener and pet sync on Android. |
+| 1 | ~~Feed button flicker / own-device echo~~ | ✅ Done | `suppressNextRealtimeLoad` (counter) replaced with `suppressUntilRef` (3s timestamp window). Eliminates broadcast-count dependency. Cross-device updates unaffected. `StatusScreen.tsx` v3.10.7. |
 | 2 | Native phone notifications | 🔴 Major | Setup push notifications for when the phone is locked |
 | 3 | ~~Ask to feed — target specific member~~ | ✅ Done | `target_user_id` + `sender_user_id` columns added. Visibility filter in `getAllNotifications` + `getUnreadNotificationsCount`. Only sender and target see the notification. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0 |
 | 4 | Reminders | 🔴 Major | Add functionality for feeding reminders (e.g. feed pet at 7pm). Reference Dan's Figma general time design |
@@ -113,7 +113,7 @@ What is **not** working:
 | 11 | ~~Invited user takes "Create Household" path instead of "Join"~~ | ✅ Fixed | Mount-time `useEffect` in `OnboardingFlow` detects `InvitationStatus === 'Pending'` and hard-routes to `invite-code` before welcome screen renders. `checkingInvite` spinner prevents flash. `OnboardingFlow.tsx` v5.1.0 |
 | 12 | ~~Invite modal had name field~~ | ✅ Fixed | Name field removed. Email only. Placeholder from email prefix. `SettingsScreen.tsx` v3.7.0 |
 | 13 | ~~New pet not appearing in StatusScreen checkboxes after being added in Settings~~ | ✅ Fixed | Resolved as part of Bug 18 fix — `onPetsChange` callback now pushes fresh pet list to StatusScreen instantly via App.tsx props. `StatusScreen.tsx` v3.9.0 |
-| 14 | Android real-time sync failure | 🔴 Major | See App Store Priority List #1 |
+| 14 | ~~Feed button flicker / own-device real-time echo~~ | ✅ Fixed | Timestamp suppression window (`suppressUntilRef`) replaces boolean/counter ref. `StatusScreen.tsx` v3.10.7. Verified iOS + Android, 9 Mar. |
 | 15 | ~~Rename Account/Member name~~ | ✅ Fixed | Pencil in Account section. `handleSaveMemberName` updates `currentUser` immediately. `SettingsScreen.tsx` v3.7.3 |
 | 16 | ~~Remove Edit Pencil in members section~~ | ✅ Fixed | Pencil removed from all member rows. Admin no longer renames other members. `SettingsScreen.tsx` v3.7.3 |
 | 17 | ~~Unable to Delete User~~ | ✅ Fixed | `suppressNextRealtimeLoad` removed from `handleRemoveMember`. RLS DELETE policy added to `user_households` — main member can remove others. Optimistic state update removes member from view instantly. |
@@ -127,7 +127,7 @@ What is **not** working:
 |---|-------------|----------|-------|
 | I1 | ~~Pet checkboxes rendering in vertical column instead of horizontal row~~ | ✅ Fixed | `petCheckboxRow` wrapper with `flexDirection: row` and `flexWrap: wrap`. `StatusScreen.tsx` v3.8.0 |
 | I2 | ~~Progress spinner on Invite Member modal~~ | ✅ Fixed | `isSendingInvite` guard before `canAddMember` for instant spinner. `SettingsScreen.tsx` v3.7.0 |
-| I3 | Move Invitation Code into Household card | 🟡 Minor | On Settings screen, invitation code sits outside the household container. Move it inside. |
+| I3 | ~~Move Invitation Code into Household card~~ | ✅ Fixed | Moved inside Household card with divider. `SettingsScreen.tsx` v3.11.0. *(8 Mar)* |
 | I4 | Self-notification on household creation | 🟠 Medium | Creator sees their own notification — filter out where `requested_by` = current user, or suppress on insert. |
 | I5 | Account Name font size in Settings | 🟡 Minor | Account name font smaller than Household name — should match. |
 | I6 | ~~Android safe area on StatusScreen~~ | ✅ Fixed | `useSafeAreaInsets` applied. `SafeAreaProvider` added to `App.tsx`. `App.tsx` v3.10.0, `StatusScreen.tsx` v3.10.0. |
@@ -146,13 +146,13 @@ What is **not** working:
 
 *Work through App Store Priority List in order. Do not skip ahead.*
 
+- [x] **Bug 14 / #1** — Feed button flicker fix. `suppressUntilRef` timestamp window. `StatusScreen.tsx` v3.10.7. Verified iOS + Android, 9 Mar.
 - [x] **Bug 11 + I13** — Onboarding guard + step reorder. `OnboardingFlow.tsx` v5.1.0. Verified 5 Mar.
 - [x] **#3** — Ask to feed: target specific member only. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. 5 Mar evening.
 - [x] **#8** — Feedback link in Settings. `SettingsScreen.tsx` v3.10.0. 8 Mar.
 - [x] **#10** — Feed History modal redesign + iOS shadow fix. `StatusScreen.tsx` v3.10.3. 8 Mar.
 - [x] **UX** — Invitation Code merged into Household card. `SettingsScreen.tsx` v3.11.0. 8 Mar.
-- [ ] **#1** — Bug 14: Android real-time sync failure ← START HERE
-- [ ] **#2** — Native push notifications (locked screen)
+- [ ] **#2** — Native push notifications (locked screen) ← START HERE
 - [ ] **#4** — Reminders (feeding time alerts)
 - [ ] **#5** — Notification toggle per member — re-add
 - [ ] **#6** — T&C and Privacy Policy views
@@ -188,7 +188,7 @@ What is **not** working:
 **Architecture patterns to know:**
 - Cache-first loading → silent background Supabase refresh
 - Optimistic UI on feed button → background sync → rollback on failure
-- `suppressNextRealtimeLoad` ref → prevents own-device update echo
+- `suppressUntilRef` → timestamp-based own-device echo suppression (3s window). Set to `Date.now() + 3000` before any Supabase write in `handleFeedClick` / `handleUndo`. Subscription callback skips `loadData()` while `Date.now() < suppressUntilRef.current`. Cleared to `0` on rollback. Replaces the old boolean/counter `suppressNextRealtimeLoad` pattern.
 - `suppressNotificationSoundRef` ref → lifted to `App.tsx`, shared via props → prevents sender hearing own notification bell
 - Two-phase user creation → minimal record on signup, full profile during onboarding
 - Pessimistic UI on Pro toggle → awaits DB confirmation before UI change
@@ -212,6 +212,7 @@ What is **not** working:
 - Onboarding step order (v5.1.0) → both paths: household intent first, name last. Invited users skip welcome entirely via mount-time check.
 - Bug classification → three tiers: Blocker Bug (stops the process), Bug (wrong but not blocking), Enhancement (improvement to correctly working feature).
 - Targeted notification visibility rule → `feed_request` notifications carry `target_user_id` and `sender_user_id`. Both `getAllNotifications` and `getUnreadNotificationsCount` apply the same visibility filter: show only if current user is sender or target. All other notification types remain household-wide. If one function is updated, the other must be updated too.
+- Supabase channel naming rule → all channels in `subscribeToHouseholdChanges` are scoped by household: `status:pets:${householdId}` and `status:feeding_events:${householdId}`. This prevents channel object reuse across household switches.
 
 **Key naming to know:**
 - `StatusScreen.tsx` uses `activeHouseholdId` (state) — renamed from `currentHouseholdId` in v3.2.0 to resolve naming collision with DB import
@@ -219,16 +220,17 @@ What is **not** working:
 - `currentHouseholdId` lives in `App.tsx` (v3.7.0), passed as `householdId` prop to `StatusScreen` and `NotificationsPanel`
 - `suppressNotificationSoundRef` lives in `App.tsx` (v3.8.0), passed to `StatusScreen` and `SettingsScreen`
 - `overrideHouseholdName` and `overridePets` live in `App.tsx` (v3.9.0), passed to `StatusScreen` as props
+- `suppressUntilRef` lives in `StatusScreen.tsx` (v3.10.7) — own-device echo suppression timestamp
 
 **Current file versions:**
 - `App.tsx` v3.10.0
-- `StatusScreen.tsx` v3.10.3 (Feed History modal redesign + iOS card shadow fix)
+- `StatusScreen.tsx` v3.10.7 (timestamp suppression window fix — own-device feed flicker)
 - `SettingsScreen.tsx` v3.11.0 (feedback mailto link, Invitation Code merged into Household card)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (Bug 11 + I13: mount-time invited user guard, step reorder)
 - `types.ts` v1.2.0 (`TargetUserID` and `SenderUserID` optional fields added to `Notification` interface)
-- `database.ts` v4.2.0 — `mapNotification` maps new fields; `addNotification` persists `targetUserId`/`senderUserId`; `getAllNotifications` + `getUnreadNotificationsCount` apply targeted visibility filter for `feed_request` type; `getMembersOfHousehold` orders by `user_households.created_at` ASC; `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; join-date filter on all notification queries
+- `database.ts` v4.2.0 — `mapNotification` maps new fields; `addNotification` persists `targetUserId`/`senderUserId`; `getAllNotifications` + `getUnreadNotificationsCount` apply targeted visibility filter for `feed_request` type; `getMembersOfHousehold` orders by `user_households.created_at` ASC; `sendInviteEmail()` returns ghost auth user ID; `claimInvite()` added; `createUserHousehold()` idempotent; join-date filter on all notification queries; `subscribeToHouseholdChanges` uses household-scoped channel names
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`

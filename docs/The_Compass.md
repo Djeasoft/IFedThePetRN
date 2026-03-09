@@ -389,6 +389,24 @@
 * **Architectural Rule**: Related settings that belong to the same entity (household name, switcher, invite code) should be grouped in a single card. Use `divider` rows to separate logical sub-sections within a card, consistent with the Account card pattern.
 * **Files changed**: `SettingsScreen.tsx` v3.10.0 → v3.11.0.
 
+---
+
+### 9 March 2026
+
+* **Milestone**: Bug 14 Fixed — Feed Button Flicker / Own-Device Real-Time Echo Eliminated.
+* **Problem**: When a user tapped the "I FED THE PET" button, the status card instantly showed the new time (optimistic update ✅), then briefly reverted to the previous time for ~0.5s on iPhone and ~1s+ on Android, before snapping back to the correct time. Affected own device only — other devices always received updates correctly.
+* **Root Cause — Evolution of the fix**: Three iterations were required to isolate the true root cause.
+  * **v3.10.4 attempt**: `suppressNextRealtimeLoad` (boolean) was moved to before the Supabase write. This helped partially but did not fully resolve the issue because the boolean was being cleared on the first broadcast while subsequent broadcasts still triggered `loadData()`.
+  * **v3.10.5 attempt**: Changed `suppressNextRealtimeLoad` from a boolean to a counter (`useRef(0)`), set to `petsToFeed.length + 1` (N pets broadcasts + 1 feeding_events broadcast). This fixed own-device flicker but broke cross-device updates — the `finally` block reset the counter to 0 immediately after writes completed, before broadcasts arrived over the network. Broadcasts from Device B were then also suppressed if they arrived during the window between the write completing and the counter naturally decrementing.
+  * **v3.10.6 attempt**: Removed the `finally` reset and added a 5-second safety timeout instead. Channel names in `subscribeToHouseholdChanges` were also made unique per household (`status:pets:${householdId}`, `status:feeding_events:${householdId}`) to prevent channel object reuse across household switches. Cross-device updates were partially restored but timing edge cases remained.
+  * **v3.10.7 — final fix**: Replaced the entire counter approach with a **timestamp-based suppression window** (`suppressUntilRef`). No broadcast counting required. No timer infrastructure.
+* **Architecture Decision — Timestamp Suppression Window**: `suppressUntilRef` is a `useRef<number>(0)`. When `handleFeedClick` or `handleUndo` begins, it is set to `Date.now() + 3000`. The subscription callback checks `if (Date.now() < suppressUntilRef.current) return` — any broadcast arriving within 3 seconds of the write is treated as an own-device echo and skipped. Broadcasts from other devices arrive after the 3-second window and call `loadData()` normally. On rollback (network error), `suppressUntilRef.current` is reset to `0` immediately — no broadcasts will arrive for a failed write.
+* **Why this is better than the counter**: The counter required knowing exactly how many broadcasts a feed operation would generate (N pets + 1 feeding_events = N+1). This count is fragile — it changes with schema, subscription setup, and Supabase behaviour. The timestamp window makes no assumptions about broadcast count and is immune to missed or extra broadcasts.
+* **Architectural Rule — Timestamp Suppression Pattern**: For optimistic UI operations that trigger real-time broadcasts, use a timestamp window ref rather than a counter. Set `suppressUntilRef.current = Date.now() + 3000` before the write. In the subscription callback: `if (Date.now() < suppressUntilRef.current) return`. Clear to `0` on rollback only. The 3-second window safely covers all Supabase round-trip latencies on any realistic mobile network while allowing cross-device updates to pass through cleanly.
+* **Architectural Rule — Supabase channel name uniqueness**: All channels in `subscribeToHouseholdChanges` must be scoped by household ID (e.g. `status:pets:${householdId}`). In Supabase JS v2, `supabase.channel(name)` returns the same object if the name is already registered — re-using a generic name like `'public:pets'` across household switches causes the cleanup `removeChannel()` to destroy a shared channel, leaving the new subscription dead.
+* **Files changed**: `StatusScreen.tsx` v3.10.6 → v3.10.7. `database.ts` channel names already updated in v3.10.6 — no further change.
+* **Verified**: Jarques tested on iPhone and Android simultaneously, 9 March 2026. No flicker on own device. Cross-device updates confirmed working.
+
 ### Categorized Debt & Ghost Logic
 
 **1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**
@@ -404,8 +422,8 @@
 * **The Risk**: As new UI rows are added to Settings or other screens, developers must use standard `View` containers rather than clickable rows when placing discrete interactive elements inside them.
 
 **4. Real-Time Echo Suppression (Architectural Rule)**
-* **The Decision**: Established a pattern using `useRef(suppressNextRealtimeLoad)` to prevent UI jitter. When a device performs an optimistic update, this flag temporarily mutes the incoming Supabase WebSocket broadcast triggered by that exact same action.
-* **The Risk**: Future developers adding real-time listeners to new screens must remember to implement this suppression ref, otherwise the app will needlessly re-fetch data and cause UI flickering immediately after user interactions.
+* **The Decision**: Established a timestamp-based suppression window pattern (`suppressUntilRef`) to prevent UI jitter on own-device optimistic updates. When a device performs an optimistic update, `suppressUntilRef.current` is set to `Date.now() + 3000`. The subscription callback skips `loadData()` while `Date.now() < suppressUntilRef.current`. Broadcasts from other devices arrive after the 3-second window and are never blocked. See 9 March 2026 entry for full evolution history.
+* **The Risk**: Future developers adding real-time listeners to new screens must implement this suppression pattern, otherwise the app will re-fetch data and cause UI flickering immediately after user interactions. Do not use a boolean or counter — use the timestamp window approach.
 
 **5. Optimistic Update Offline Queue (State Management Debt)**
 * **The Issue**: The Optimistic UI implementation successfully hides network latency. If the background Supabase sync fails, it correctly rolls back the state.
