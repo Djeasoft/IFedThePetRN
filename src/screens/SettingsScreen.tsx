@@ -16,8 +16,12 @@
 // Version: 3.9.0 - Priority #3: Targeted feed requests — pass targetUserId and senderUserId so only sender and target see the notification
 // Version: 3.10.0 - Priority #8: Replace plain feedback email text with tappable "Give your feedback" link (mailto)
 // Version: 3.11.0 - Merge Invitation Code into Household card (divider + row at bottom, isMainMember guard)
+// Version: 3.12.0 - #4 + #5: Feed reminders — "Feed reminders" toggle in Notifications card;
+//                   Reminders section opens FeedRemindersModal (Pro only); toggle stored in
+//                   user_households.receives_reminders via setReceivesReminders/getReceivesReminders
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FeedRemindersModal } from './FeedRemindersModal';
 import {
   View,
   Text,
@@ -62,7 +66,9 @@ import {
   setCurrentHouseholdId,
   getCurrentHouseholdId,
   clearCurrentUserId,
-  clearCurrentHouseholdId
+  clearCurrentHouseholdId,
+  setReceivesReminders,
+  getReceivesReminders,
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { signOut as authSignOut } from '../lib/auth';
@@ -77,6 +83,7 @@ interface SettingsScreenCache {
   pets: Pet[];
   feedingNotifications: boolean;
   memberJoinedNotifications: boolean;
+  remindersEnabled: boolean;
 }
 
 interface SettingsScreenProps {
@@ -121,6 +128,10 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
   // Notification preferences
   const [feedingNotifications, setFeedingNotifications] = useState(true);
   const [memberJoinedNotifications, setMemberJoinedNotifications] = useState(true);
+  const [remindersEnabled, setRemindersEnabled] = useState(true);
+
+  // Feed Reminders modal
+  const [showFeedRemindersModal, setShowFeedRemindersModal] = useState(false);
 
   // Copy code feedback
   const [codeCopied, setCodeCopied] = useState(false);
@@ -166,6 +177,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           setPets(cached.pets);
           setFeedingNotifications(cached.feedingNotifications);
           setMemberJoinedNotifications(cached.memberJoinedNotifications);
+          setRemindersEnabled(cached.remindersEnabled ?? true);
           setLoading(false); // Show cached data instantly
         }
       }
@@ -205,13 +217,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
         setAllHouseholds(households);
 
         // FIX: Parallel fetch of members and pets (2x faster!)
-        const [householdMembers, householdPets] = await Promise.all([
+        const [householdMembers, householdPets, receivesReminders] = await Promise.all([
           getMembersOfHousehold(hh.HouseholdID),
-          getPetsByHouseholdId(hh.HouseholdID)
+          getPetsByHouseholdId(hh.HouseholdID),
+          userId ? getReceivesReminders(userId, hh.HouseholdID) : Promise.resolve(true),
         ]);
 
         setMembers(sortMembers(householdMembers));
         setPets(householdPets);
+        setRemindersEnabled(receivesReminders);
 
         // Step 3: Write fresh data to cache
         await setCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN, {
@@ -221,6 +235,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           pets: householdPets,
           feedingNotifications: feedNotifs,
           memberJoinedNotifications: memberNotifs,
+          remindersEnabled: receivesReminders,
         });
       }
     } catch (error) {
@@ -489,6 +504,23 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       await updateUser(currentUser.UserID, { NotificationPreferences: newPrefs });
     } catch (error) {
       console.error('Error updating notification preferences:', error);
+    }
+  };
+
+  // Toggle whether this user receives household feed reminders.
+  // Stored in user_households.receives_reminders — pessimistic UI (awaits DB confirmation).
+  const handleRemindersToggle = async (value: boolean) => {
+    if (!currentUser || !household) return;
+    setRemindersEnabled(value); // Optimistic — feels instant
+    try {
+      const success = await setReceivesReminders(currentUser.UserID, household.HouseholdID, value);
+      if (!success) {
+        // Roll back on failure
+        setRemindersEnabled(!value);
+      }
+    } catch (error) {
+      console.error('Error updating reminders preference:', error);
+      setRemindersEnabled(!value);
     }
   };
 
@@ -1188,9 +1220,28 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     onValueChange={(v) => handleNotificationToggle('memberJoined', v)}
                   />
                 </TouchableOpacity>
+                <View style={[styles.divider, { backgroundColor: theme.border }]} />
+                {/* Feed reminders toggle — disabled on Free tier */}
+                <View
+                  style={[styles.notificationRow, !isPro && { opacity: 0.4 }]}
+                >
+                  <View style={styles.notificationRowLeft}>
+                    <Text style={[styles.notificationRowLabel, { color: theme.text }]}>
+                      Feed reminders
+                    </Text>
+                    <Text style={[styles.notificationRowDesc, { color: theme.textSecondary }]}>
+                      Get reminded to feed my pet
+                    </Text>
+                  </View>
+                  <Switch
+                    value={isPro ? remindersEnabled : false}
+                    onValueChange={isPro ? handleRemindersToggle : undefined}
+                    disabled={!isPro}
+                  />
+                </View>
               </View>
 
-              {/* Reminders Section - Show for all users with Pro badge */}
+              {/* Reminders Section */}
               <View style={styles.sectionHeaderRow}>
                 <Text style={[styles.sectionHeader, { color: theme.textSecondary, marginTop: 0, marginBottom: 0, marginHorizontal: 0 }]}>
                   Reminders
@@ -1205,8 +1256,8 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                 <TouchableOpacity
                   style={[styles.remindersRow, !isPro && { opacity: 0.4 }]}
                   onPress={() => {
-                    if (isPro) {
-                      Alert.alert('Coming Soon', 'Feed reminders will be available in a future update.');
+                    if (isPro && household) {
+                      setShowFeedRemindersModal(true);
                     }
                   }}
                   disabled={!isPro}
@@ -1864,6 +1915,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             </View>
           </View>
         </Modal>
+
+        {/* Feed Reminders Modal */}
+        {household && (
+          <FeedRemindersModal
+            visible={showFeedRemindersModal}
+            onClose={() => setShowFeedRemindersModal(false)}
+            householdId={household.HouseholdID}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

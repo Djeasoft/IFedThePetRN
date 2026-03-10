@@ -7,6 +7,7 @@
 // Version: 4.0.0 - Fetch the user's join date to exclude pre-join notifications from the count
 // Version: 4.1.0 - Sort members: main member first, then active by Creation Date + removeUserFromHousehold count added
 // Version: 4.2.0 - Targeted feed requests: targetUserId + senderUserId columns mapped; visibility filter applied in getAllNotifications and getUnreadNotificationsCount
+// Version: 4.3.0 - Feed reminders migrated from AsyncStorage to Supabase; setReceivesReminders/getReceivesReminders added
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,7 +21,6 @@ const STORAGE_KEYS = {
   CURRENT_USER_ID: 'currentUserId',
   CURRENT_HOUSEHOLD_ID: 'currentHouseholdId',
   NOTIFICATIONS: 'notifications',
-  FEED_REMINDERS: 'feedReminders',
   ONBOARDING_COMPLETED: 'onboardingCompleted',
 };
 
@@ -1200,87 +1200,135 @@ export async function undoFeedingEvent(eventId: string): Promise<boolean> {
 }
 
 // ===== FEED REMINDERS =====
+// Migrated from AsyncStorage to Supabase (v4.3.0)
+// Reminders are household-scoped. Each row: id, household_id, label, time (HH:mm), created_at.
+// Per-member opt-in is stored in user_households.receives_reminders (boolean).
 
-export async function getAllFeedReminders(): Promise<FeedReminder[]> {
-  try {
-    const feedRemindersJson = await AsyncStorage.getItem(STORAGE_KEYS.FEED_REMINDERS);
-    return feedRemindersJson ? JSON.parse(feedRemindersJson) : [];
-  } catch (error) {
-    console.error('Error reading feed reminders:', error);
-    return [];
-  }
-}
-
-export async function saveAllFeedReminders(feedReminders: FeedReminder[]): Promise<void> {
-  try {
-    await AsyncStorage.setItem(STORAGE_KEYS.FEED_REMINDERS, JSON.stringify(feedReminders));
-  } catch (error) {
-    console.error('Error saving feed reminders:', error);
-    throw error;
-  }
-}
-
-export async function addFeedReminder(reminder: Omit<FeedReminder, 'ReminderID' | 'DateCreated' | 'DateUpdated'>): Promise<FeedReminder> {
-  try {
-    const feedReminders = await getAllFeedReminders();
-    const now = new Date().toISOString();
-
-    const newReminder: FeedReminder = {
-      ...reminder,
-      ReminderID: generateUUID(),
-      DateCreated: now,
-      DateUpdated: now,
-    };
-    feedReminders.push(newReminder);
-    await saveAllFeedReminders(feedReminders);
-    return newReminder;
-  } catch (error) {
-    console.error('Error adding feed reminder:', error);
-    throw error;
-  }
-}
+const mapFeedReminder = (data: any): FeedReminder => ({
+  ReminderID: data.id,
+  HouseholdID: data.household_id,
+  Title: data.label,
+  Time: data.time,
+  IsActive: true, // All rows in the table are active — deletion is used instead of toggling
+  DateCreated: data.created_at,
+  DateUpdated: data.created_at,
+});
 
 export async function getFeedRemindersByHouseholdId(householdId: string): Promise<FeedReminder[]> {
   try {
-    const feedReminders = await getAllFeedReminders();
-    return feedReminders
-      .filter((r) => r.HouseholdID === householdId && r.IsActive)
-      .sort((a, b) => a.Time.localeCompare(b.Time)); // Sort by time
+    const { data, error } = await supabase
+      .from('reminders')
+      .select('*')
+      .eq('household_id', householdId)
+      .order('time', { ascending: true }); // Sort by time ascending (07:00 before 17:00)
+
+    if (error) {
+      console.error('Error getting feed reminders:', error.message);
+      return [];
+    }
+
+    return (data || []).map(mapFeedReminder);
   } catch (error) {
-    console.error('Error getting feed reminders by household ID:', error);
+    console.error('Error in getFeedRemindersByHouseholdId:', error);
     return [];
   }
 }
 
-export async function updateFeedReminder(reminderId: string, updates: Partial<FeedReminder>): Promise<FeedReminder | null> {
+export async function addFeedReminder(
+  householdId: string,
+  label: string,
+  time: string
+): Promise<FeedReminder> {
   try {
-    const feedReminders = await getAllFeedReminders();
-    const index = feedReminders.findIndex((r) => r.ReminderID === reminderId);
-    if (index === -1) return null;
+    const { data, error } = await supabase
+      .from('reminders')
+      .insert([{ household_id: householdId, label: label.trim(), time }])
+      .select()
+      .single();
 
-    feedReminders[index] = {
-      ...feedReminders[index],
-      ...updates,
-      DateUpdated: new Date().toISOString(),
-    };
-    await saveAllFeedReminders(feedReminders);
-    return feedReminders[index];
+    if (error) {
+      console.error('Error adding feed reminder:', error.message);
+      throw error;
+    }
+
+    return mapFeedReminder(data);
   } catch (error) {
-    console.error('Error updating feed reminder:', error);
+    console.error('Error in addFeedReminder:', error);
     throw error;
   }
 }
 
 export async function deleteFeedReminder(reminderId: string): Promise<boolean> {
   try {
-    const feedReminders = await getAllFeedReminders();
-    const filtered = feedReminders.filter((r) => r.ReminderID !== reminderId);
-    if (filtered.length === feedReminders.length) return false;
-    await saveAllFeedReminders(filtered);
+    const { error } = await supabase
+      .from('reminders')
+      .delete()
+      .eq('id', reminderId);
+
+    if (error) {
+      console.error('Error deleting feed reminder:', error.message);
+      return false;
+    }
+
     return true;
   } catch (error) {
-    console.error('Error deleting feed reminder:', error);
-    throw error;
+    console.error('Error in deleteFeedReminder:', error);
+    return false;
+  }
+}
+
+/**
+ * Update the receives_reminders flag for a user in a specific household.
+ * Controls whether local notifications fire for this user.
+ */
+export async function setReceivesReminders(
+  userId: string,
+  householdId: string,
+  value: boolean
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('user_households')
+      .update({ receives_reminders: value })
+      .eq('user_id', userId)
+      .eq('household_id', householdId);
+
+    if (error) {
+      console.error('Error updating receives_reminders:', error.message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in setReceivesReminders:', error);
+    return false;
+  }
+}
+
+/**
+ * Get the receives_reminders flag for a user in a specific household.
+ */
+export async function getReceivesReminders(
+  userId: string,
+  householdId: string
+): Promise<boolean> {
+  try {
+    const { data, error } = await supabase
+      .from('user_households')
+      .select('receives_reminders')
+      .eq('user_id', userId)
+      .eq('household_id', householdId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error getting receives_reminders:', error.message);
+      return true; // Default to true — opt-in by default
+    }
+
+    return data?.receives_reminders ?? true;
+  } catch (error) {
+    console.error('Error in getReceivesReminders:', error);
+    return true;
   }
 }
 
