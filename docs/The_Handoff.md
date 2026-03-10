@@ -128,7 +128,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#3** — Ask to feed: target specific member. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. 5 Mar.
 - [x] **#4 + #5 (UI + persistence)** — Feed reminders modal + toggle. `FeedRemindersModal.tsx` v1.0.0, `database.ts` v4.3.0, `SettingsScreen.tsx` v3.12.0, `types.ts` v1.3.0. 10 Mar. ⚠️ Run before testing: `npx expo install @react-native-community/datetimepicker`
 - [ ] **#4 — Reminders — notifications DEPLOY NEXT** ← START HERE
-  - Create `supabase/functions/process-reminders/index.ts` (code designed in Claude.ai session 10 Mar)
+  - `supabase/functions/process-reminders/index.ts` ✅ already created (v1.0.0)
   - Deploy: `npx supabase functions deploy process-reminders`
   - Schedule via pg_cron in Supabase SQL Editor: `SELECT cron.schedule('process-reminders-every-minute', '* * * * *', $$SELECT net.http_post(...)$$)`
   - Store service role key: `ALTER DATABASE postgres SET app.service_role_key = 'YOUR_KEY';`
@@ -212,7 +212,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)
-- `types.ts` v1.3.0 (`remindersEnabled` in `NotificationPreferences`; `FeedReminder` updated to Supabase shape — `IsActive`/`DateUpdated` removed, `Title` → `Label`)
+- `types.ts` v1.3.1 (`remindersEnabled` in `NotificationPreferences`; `FeedReminder` updated to Supabase shape — `IsActive`/`DateUpdated` removed, `Title` → `Label`; `'reminder'` added to Notification type union)
 - `database.ts` v4.3.0 — AsyncStorage reminder functions replaced with Supabase; `mapFeedReminder` added; `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder` rewritten; `setReceivesReminders` + `getReceivesReminders` added; `FEED_REMINDERS` storage key removed
 
 **Supabase:**
@@ -221,7 +221,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - Tables without real-time (not needed): `reminders`, `users`
 - Extensions enabled: `pg_cron`, `pg_net`
 - Edge Functions deployed: `send-invite-email`, `claim-invite`
-- Edge Functions ready but not deployed: `process-reminders` (code designed 10 Mar — create `supabase/functions/process-reminders/index.ts` before deploying)
+- Edge Functions created but not deployed: `process-reminders` (`supabase/functions/process-reminders/index.ts` v1.0.0 — deploy next)
 - From address: `noreply@ifedthepet.app`
 
 ---

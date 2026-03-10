@@ -3,6 +3,7 @@
 -- Version: 1.0.5 - notifications: target_user_id + sender_user_id added for targeted feed requests (5 Mar 2026)
 -- Version: 1.1.0 - reminders table added; user_households.receives_reminders added; RLS enabled on reminders (10 Mar 2026)
 -- Version: 1.2.0 - RLS policies applied to reminders table: INSERT, SELECT, UPDATE, DELETE (10 Mar 2026)
+-- Version: 1.2.1 - notifications.target_user_id comment updated: also used for reminder type (10 Mar 2026)
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
@@ -53,7 +54,7 @@ CREATE TABLE public.notifications (
   member_name text,
   requested_by text,
   created_at timestamp with time zone DEFAULT now(),
-  target_user_id uuid,   -- feed_request only: the member being asked to feed (null = household-wide)
+  target_user_id uuid,   -- targeted notifications: feed_request (member asked to feed) or reminder (recipient member); null = household-wide
   sender_user_id uuid,   -- feed_request only: the member who sent the request
   CONSTRAINT notifications_pkey PRIMARY KEY (id),
   CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id)
