@@ -203,7 +203,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)
 - `types.ts` v1.3.0 (`remindersEnabled` in `NotificationPreferences`; `FeedReminder` updated to Supabase shape — `IsActive`/`DateUpdated` removed, `Title` → `Label`)
-- `database.ts` v4.3.0 — AsyncStorage reminder functions replaced with Supabase; `mapFeedReminder` added; `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder` rewritten; `updateUserHouseholdReminders` + `getUserHouseholdReminders` added; `FEED_REMINDERS` storage key removed
+- `database.ts` v4.3.0 — AsyncStorage reminder functions replaced with Supabase; `mapFeedReminder` added; `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder` rewritten; `setReceivesReminders` + `getReceivesReminders` added; `FEED_REMINDERS` storage key removed
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`

@@ -135,7 +135,7 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
   const handleDelete = (reminder: FeedReminder) => {
     Alert.alert(
       'Delete Reminder',
-      `Are you sure you want to delete "${reminder.Title}"?`,
+      `Are you sure you want to delete "${reminder.Label}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -219,7 +219,7 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
                   >
                     <View style={styles.reminderCardLeft}>
                       <Text style={[styles.reminderLabel, { color: theme.text }]}>
-                        {reminder.Title}
+                        {reminder.Label}
                       </Text>
                       <Text style={[styles.reminderTime, { color: theme.textSecondary }]}>
                         {reminder.Time}

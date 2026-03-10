@@ -1,6 +1,7 @@
 // AuthScreen.tsx - Landing, Sign Up, Login, Email Verification, Password Reset
 // Version: 1.0.0 - Supabase Auth with Email/Password, Apple, Google
 // Version: 1.1.0 - Create user record in database immediately upon signup (not during onboarding)
+// Version: 1.2.0 - Invited user claim flow: getUserByEmail check on signup; claimInvite() for Pending users; Active user directed to login
 
 import React, { useState, useEffect } from 'react';
 import {

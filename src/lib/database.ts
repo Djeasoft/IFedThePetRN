@@ -1207,11 +1207,9 @@ export async function undoFeedingEvent(eventId: string): Promise<boolean> {
 const mapFeedReminder = (data: any): FeedReminder => ({
   ReminderID: data.id,
   HouseholdID: data.household_id,
-  Title: data.label,
+  Label: data.label,
   Time: data.time,
-  IsActive: true, // All rows in the table are active — deletion is used instead of toggling
   DateCreated: data.created_at,
-  DateUpdated: data.created_at,
 });
 
 export async function getFeedRemindersByHouseholdId(householdId: string): Promise<FeedReminder[]> {
