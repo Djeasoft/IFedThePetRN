@@ -88,7 +88,7 @@ What is **not** working:
 | 2 | Native phone notifications | 🔴 Major | Requires EAS Build — cannot test in Expo Go. Dedicated setup session needed (see D11). |
 | 3 | ~~Ask to feed — target specific member~~ | ✅ Done | `target_user_id` + `sender_user_id` columns. Visibility filter in both notification queries. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. |
 | 4 | ~~Reminders — modal + Supabase persistence + notification firing~~ | ✅ Done | `FeedRemindersModal.tsx` v1.0.0. `reminders` table. `database.ts` v4.3.0. `process-reminders` Edge Function deployed and verified. pg_cron scheduled every minute. Notifications fire on device. Timezone note: times stored as HH:mm UTC — offset handling needed before launch (D12). |
-| 5 | ~~Reminders — notification toggle per member~~ | ✅ Done | "Feed reminders" toggle in Notifications card. `receives_reminders` on `user_households`. Pessimistic UI. `SettingsScreen.tsx` v3.12.0. |
+| 5 | Reminders — notification toggle per member | 🔴 Major | "Feed reminders" toggle in Notifications card. `receives_reminders` on `user_households`. Pessimistic UI. `SettingsScreen.tsx` v3.12.0. - This was marked as done, however after testing, the toggle state on/off is not being saved on the settingsscreen |
 | 6 | T&C | 🔴 Major | Add views for Terms & Conditions and Privacy Policy. Worked in React Web Figma. |
 | 7 | How to section | 🔴 Major | Needs to be updated. |
 | 8 | ~~Support on Settings~~ | ✅ Done | "Give your feedback" tappable mailto link. `SettingsScreen.tsx` v3.10.0. |
@@ -131,7 +131,8 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#4 — Reminders notifications** — `process-reminders` Edge Function deployed. pg_cron scheduled every minute with service role JWT in Authorization header. Verified: notifications fire on device via Expo Go. 10 Mar.
 - [x] **#8** — Feedback link in Settings. `SettingsScreen.tsx` v3.10.0. 8 Mar.
 - [x] **#10** — Feed History modal redesign + iOS shadow fix. `StatusScreen.tsx` v3.10.3. 8 Mar.
-- [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
+- [ ] **#5** — Reminders — notification toggle per member ← START HERE
+- [ ] **#2** — Native push notifications (EAS Build setup session)
 - [ ] **#6** — T&C and Privacy Policy views
 - [ ] **#7** — How to section update
 - [ ] **#9** — Supabase RLS
