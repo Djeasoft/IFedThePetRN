@@ -490,3 +490,9 @@
 * **The Issue**: Both Apple App Store and Google Play Store require apps to provide a mechanism for users to delete their own account. Currently only main members can remove other members from a household — there is no self-deletion flow.
 * **The Risk**: App will be rejected at review without this feature. Full account deletion requires removing the auth record, the `users` row, all `user_households` links, and handling the edge case where the user is the main member of a household (transfer or dissolve the household first).
 * **When to fix**: Before launch.
+
+**22. Native Push Notifications — EAS Build Required (Infrastructure Debt)**
+* **The Decision**: Push notifications (#2 on App Store Priority List) cannot be implemented or tested in Expo Go. Expo Go is a shared Expo-owned app — Apple (APNs) and Google (FCM) will not deliver notifications to an app they don't recognise as yours.
+* **The Path Forward**: Expo EAS Build is a cloud-based build service that produces a real signed app bundle from Windows 11 — no Mac required. iOS: distribute via TestFlight for testing. Android: distribute via Google Play Internal Testing track.
+* **Why deferred**: EAS Build requires a dedicated setup session (Apple Developer account, EAS CLI, build configuration). All Expo Go-compatible items on the App Store Priority List will be completed first.
+* **The Risk**: Until a real build exists, push notifications (lock screen alerts triggered by other household members' actions) cannot be delivered. In-app real-time bells via Supabase WebSocket subscriptions remain the fallback for foreground notifications.

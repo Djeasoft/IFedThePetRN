@@ -176,7 +176,7 @@ What is **not** working:
 | D8 | `sendMemberRemovedEmail()` is now a no-op log — no email sent when member is removed | Phase B |
 | D9 | Remove Developer Testing section from Settings view | Before launch |
 | D10 | Self-deletion / account deletion — required by App Store & Play Store policies | Before launch |
-
+| D11 | Native push notifications require EAS Build — cannot be tested in Expo Go. Expo Go is a shared app (owned by Expo) so Apple/Google won't deliver push notifications to it. Solution: use Expo EAS Build (cloud-based, works from Windows 11) to produce a real installed app. Test on iOS via TestFlight, Android via Google Play Internal Testing. EAS Build also handles iOS APNs certificates automatically. Deferred until dedicated EAS Build setup session. | Before #2 can be built |
 ---
 
 ## 7. PROJECT CONTEXT (FOR AI ONBOARDING)
