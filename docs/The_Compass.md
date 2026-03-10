@@ -426,6 +426,12 @@
 * **Architectural Rule — Pessimistic UI for reminders toggle**: The "Feed reminders" toggle uses pessimistic UI — awaits Supabase confirmation before updating state. Rationale: preference changes must be correct before reflecting in UI, consistent with the Pro toggle pattern.
 * **Architectural Rule — Reminder opt-out scope**: `receives_reminders` on `user_households` is the sole per-member opt-out for reminders. There is no per-reminder toggle. OS-level notification scheduling (the actual alarm when the phone is locked) is not yet wired — requires `expo-notifications` and will be implemented alongside #2 (EAS Build). The Supabase persistence layer and modal UI are complete.
 * **Files changed**: `types.ts` v1.3.0, `database.ts` v4.3.0, `SettingsScreen.tsx` v3.12.0, NEW `FeedRemindersModal.tsx` v1.0.0.
+* **Milestone**: Reminder Notification Architecture Designed — pg_cron + Edge Function.
+* **Action**: Enabled `pg_cron` and `pg_net` extensions in Supabase Dashboard → Database → Extensions. These are prerequisites for server-side reminder scheduling.
+* **Architecture Decision — Server-side reminder scheduling**: Reminders fire via a `process-reminders` Supabase Edge Function invoked by `pg_cron` every minute. The Edge Function queries `reminders` for rows where `time = HH:mm UTC`, then for each matching reminder inserts one `reminder` type notification per household member where `receives_reminders = true`, with `target_user_id` set to that member's user_id. The existing real-time subscription on `notifications` handles the bell badge + chime client-side — no polling. This architecture is forward-compatible with native push notifications (Phase B) — the push call slots into the same Edge Function alongside the DB insert.
+* **Note**: Edge Function code designed, not yet deployed. File to create: `supabase/functions/process-reminders/index.ts`.
+* **Architectural Rule — Timezone**: Reminder times are stored and matched as `HH:mm` text in UTC. Users in non-UTC timezones will see reminders fire at the wrong local time until timezone offset handling is added. This is tracked as D12 in the Handoff.
+* **Note — visibility filter**: The `reminder` notification type sets `target_user_id` per eligible member, so the existing `target_user_id`-based visibility filter in `getAllNotifications` and `getUnreadNotificationsCount` handles it correctly without type-specific code changes.
 
 ---
 
