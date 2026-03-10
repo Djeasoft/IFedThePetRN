@@ -1,6 +1,7 @@
 // Data types based on ERD specification
 // Version: 1.1.0 - Updated with Supabase history fields
 // Version: 1.2.0 - Notification: added targetUserId and senderUserId for targeted feed requests
+// Version: 1.3.0 - NotificationPreferences: added remindersEnabled; FeedReminder: migrated to Supabase shape (removed IsActive)
 
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
@@ -23,6 +24,7 @@ export interface NotificationPreferences {
   memberJoinedNotifications: boolean;
   petAddedNotifications: boolean;
   memberRemovedNotifications: boolean;
+  remindersEnabled: boolean;
 }
 
 export interface Household {
@@ -86,11 +88,9 @@ export interface FeedingEvent {
 export interface FeedReminder {
   ReminderID: string;
   HouseholdID: string;
-  Title: string;
-  Time: string;
-  IsActive: boolean;
+  Label: string;
+  Time: string; // Stored as "HH:mm"
   DateCreated: string;
-  DateUpdated: string;
 }
 
 export const TIER_LIMITS = {
