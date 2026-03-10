@@ -407,7 +407,7 @@
 * **Files changed**: `StatusScreen.tsx` v3.10.6 → v3.10.7. `database.ts` channel names already updated in v3.10.6 — no further change.
 * **Verified**: Jarques tested on iPhone and Android simultaneously, 9 March 2026. No flicker on own device. Cross-device updates confirmed working.
 
-### 10 March 2026
+### 10 March 2026 — Morning Session
 
 * **Milestone**: App Store Priority #4 + #5 — Feed Reminders Modal & Per-Member Reminder Toggle.
 * **Design Decisions (confirmed with Dan's Figma flows)**:
@@ -432,6 +432,18 @@
 * **Action**: `supabase/functions/process-reminders/index.ts` v1.0.0 created. `supabase/functions/process-reminders/deno.json` created. `supabase/config.toml` updated with `[functions.process-reminders]` block. `types.ts` bumped to v1.3.1 — `'reminder'` added to Notification type union. Edge Function not yet deployed — deploy next.
 * **Architectural Rule — Timezone**: Reminder times are stored and matched as `HH:mm` text in UTC. Users in non-UTC timezones will see reminders fire at the wrong local time until timezone offset handling is added. This is tracked as D12 in the Handoff.
 * **Note — visibility filter**: The `reminder` notification type sets `target_user_id` per eligible member, so the existing `target_user_id`-based visibility filter in `getAllNotifications` and `getUnreadNotificationsCount` handles it correctly without type-specific code changes.
+
+### 10 March 2026 — Evening Session
+
+* **Milestone**: `process-reminders` Edge Function Deployed & Verified End-to-End.
+* **Problem**: The `process-reminders` Edge Function had been deployed (2 deployments visible in Supabase Dashboard) but the pg_cron job was failing every minute with `ERROR: unrecognized configuration parameter "app.service_role_key"`. The cron schedule SQL used `current_setting('app.service_role_key')` to retrieve the service role key — but this database configuration parameter had never been set. The `SET app.service_role_key` step documented in The Handoff was skipped when the cron job was originally scheduled.
+* **Secondary Problem**: When the cron command was updated with a key, the wrong key type was used — a Supabase secret (`sb_secret_` prefix) rather than the service role JWT (`eyJ...` prefix). This produced 401 Unauthorized responses from the Edge Function, confirmed via the Invocations log in the Supabase Dashboard.
+* **Root Cause Summary**: Two compounding errors — (1) `current_setting('app.service_role_key')` is not a supported Supabase database parameter; (2) the service role key is a JWT found at Dashboard → Project Settings → API → `service_role`, not a Supabase secret.
+* **Action**: Unscheduled the broken cron job via `SELECT cron.unschedule('process-reminders-every-minute')`. Rescheduled with the service role JWT hardcoded directly in the `net.http_post` headers jsonb.
+* **Architectural Rule — pg_cron auth pattern**: The service role JWT must be hardcoded directly in the `net.http_post` headers in the cron schedule command. `current_setting('app.service_role_key')` does NOT work — Supabase does not support that database configuration parameter. The JWT is found at Dashboard → Project Settings → API → `service_role`. It begins with `eyJ...` and is distinct from Supabase secrets (`sb_secret_` prefix). Remember to rotate the hardcoded JWT when rotating the service role key (D6).
+* **Verified**: `cron.job_run_details` confirmed `status = succeeded`. Test reminder inserted for current UTC minute — `reminder` type notification appeared in the `notifications` table and pushed to device via the existing real-time subscription. Bell badge updated and chime played on Expo Go. Full pipeline confirmed: pg_cron → Edge Function → Supabase notifications table → real-time subscription → bell + chime on device.
+* **Debt added**: D13 — pg_cron service role JWT hardcoded in cron job SQL — rotate when rotating D6 (service role key rotation).
+* **Files changed**: No code changes. Supabase cron job rescheduled only.
 
 ---
 
