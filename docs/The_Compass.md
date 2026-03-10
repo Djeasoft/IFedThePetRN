@@ -407,7 +407,7 @@
 * **Files changed**: `StatusScreen.tsx` v3.10.6 → v3.10.7. `database.ts` channel names already updated in v3.10.6 — no further change.
 * **Verified**: Jarques tested on iPhone and Android simultaneously, 9 March 2026. No flicker on own device. Cross-device updates confirmed working.
 
-### 10 March 2026 — Morning Session
+### 10 March 2026 — Session 1 (Morning)
 
 * **Milestone**: App Store Priority #4 + #5 — Feed Reminders Modal & Per-Member Reminder Toggle.
 * **Design Decisions (confirmed with Dan's Figma flows)**:
@@ -433,7 +433,7 @@
 * **Architectural Rule — Timezone**: Reminder times are stored and matched as `HH:mm` text in UTC. Users in non-UTC timezones will see reminders fire at the wrong local time until timezone offset handling is added. This is tracked as D12 in the Handoff.
 * **Note — visibility filter**: The `reminder` notification type sets `target_user_id` per eligible member, so the existing `target_user_id`-based visibility filter in `getAllNotifications` and `getUnreadNotificationsCount` handles it correctly without type-specific code changes.
 
-### 10 March 2026 — Evening Session
+### 10 March 2026 — Session 2 (Afternoon - Evening)
 
 * **Milestone**: `process-reminders` Edge Function Deployed & Verified End-to-End.
 * **Problem**: The `process-reminders` Edge Function had been deployed (2 deployments visible in Supabase Dashboard) but the pg_cron job was failing every minute with `ERROR: unrecognized configuration parameter "app.service_role_key"`. The cron schedule SQL used `current_setting('app.service_role_key')` to retrieve the service role key — but this database configuration parameter had never been set. The `SET app.service_role_key` step documented in The Handoff was skipped when the cron job was originally scheduled.
@@ -444,6 +444,29 @@
 * **Verified**: `cron.job_run_details` confirmed `status = succeeded`. Test reminder inserted for current UTC minute — `reminder` type notification appeared in the `notifications` table and pushed to device via the existing real-time subscription. Bell badge updated and chime played on Expo Go. Full pipeline confirmed: pg_cron → Edge Function → Supabase notifications table → real-time subscription → bell + chime on device.
 * **Debt added**: D13 — pg_cron service role JWT hardcoded in cron job SQL — rotate when rotating D6 (service role key rotation).
 * **Files changed**: No code changes. Supabase cron job rescheduled only.
+
+### 10 March 2026 — Session 3 (Evening)
+
+* **Milestone**: App Store Priority #5 — "Feed Reminders" Toggle Now Persists Correctly.
+* **Problem**: The "Feed reminders" toggle in the Notifications card of `SettingsScreen` appeared to save — it updated visually on tap — but reverted to its previous state on every reload. No error was thrown. `handleRemindersToggle` returned `success = true` despite nothing being written to the database.
+* **Root Cause**: `setReceivesReminders` in `database.ts` called `.update({ receives_reminders: value }).eq('user_id', userId).eq('household_id', householdId)` on the `user_households` table. RLS was active but no UPDATE policy existed that allowed a **member to update their own row**. The existing UPDATE policy only covered the admin-deletes-member scenario (added 3 March 2026). Supabase silently returned 0 rows affected with no error — so `success` came back `true`, the optimistic UI stuck, but the value was never written to the database.
+* **Diagnosis pattern**: Toggle reverts on reload + no error logged + `success = true` = silent RLS UPDATE failure. This is the same class of bug as the Pro Toggle footgun documented in the Categorised Debt section.
+* **Action**: Added a new RLS UPDATE policy to the `user_households` table in Supabase Dashboard:
+  ```sql
+  CREATE POLICY "Members can update their own user_households row"
+  ON user_households
+  FOR UPDATE
+  USING (
+    user_id = (SELECT id FROM users WHERE auth_user_id = auth.uid())
+  )
+  WITH CHECK (
+    user_id = (SELECT id FROM users WHERE auth_user_id = auth.uid())
+  );
+  ```
+* **No code changes** — `SettingsScreen.tsx` and `database.ts` were correct. The fix was entirely a Supabase RLS policy addition.
+* **Architectural Rule**: Any column a member needs to update on their own `user_households` row requires a dedicated RLS UPDATE policy scoped via `users.auth_user_id = auth.uid()`. A policy covering admin-deletes-member does not cover member-updates-own-row — these are separate policies. Silent 0-row updates with no error are the signature of a missing UPDATE RLS policy.
+* **Verified**: Toggle persists correctly across reloads. Verified on device, 10 March 2026.
+* **Files changed**: No code files. Supabase RLS policy added to `user_households` table.
 
 ---
 
