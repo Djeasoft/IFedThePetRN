@@ -407,6 +407,28 @@
 * **Files changed**: `StatusScreen.tsx` v3.10.6 → v3.10.7. `database.ts` channel names already updated in v3.10.6 — no further change.
 * **Verified**: Jarques tested on iPhone and Android simultaneously, 9 March 2026. No flicker on own device. Cross-device updates confirmed working.
 
+### 10 March 2026
+
+* **Milestone**: App Store Priority #4 + #5 — Feed Reminders Modal & Per-Member Reminder Toggle.
+* **Design Decisions (confirmed with Dan's Figma flows)**:
+  - Reminders are household-scoped — any member can create or delete a reminder; all reminders belong to the household, not to individual members.
+  - Per-member opt-out controlled by the "Feed reminders" toggle in the Notifications card (`receives_reminders` on `user_households`). This is the sole on/off mechanism per member.
+  - No per-reminder toggle — earlier Figma iterations showed one but it was removed from the agreed design.
+  - Any household member can create and delete reminders (not admin-only).
+  - Native platform time picker used on both platforms — no custom drum-roll.
+  - `FeedRemindersModal` extracted as a separate file rather than inlined in SettingsScreen due to complexity.
+* **Database**: New `reminders` table created in Supabase: `id` (uuid pk), `household_id` (uuid fk → households), `label` (text), `time` (text, stored as `"HH:mm"`), `created_at`. RLS enabled. `user_households.receives_reminders` boolean column was already present.
+* **Action**: Replaced all legacy AsyncStorage-backed reminder functions in `database.ts` with Supabase equivalents. Functions removed: `getAllFeedReminders`, `saveAllFeedReminders`, `updateFeedReminder` (no longer needed — reminders are deleted and re-created, not edited). Functions rewritten: `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder`. New functions added: `updateUserHouseholdReminders(userId, householdId, value)`, `getUserHouseholdReminders(userId, householdId)`. New mapper: `mapFeedReminder`. Unused `FEED_REMINDERS` storage key removed.
+* **Action**: Created `FeedRemindersModal.tsx` v1.0.0. Full-screen modal with: empty state ("No reminders yet" + "Create your first reminder" button); add form (label `TextInput` + time display field that opens native `DateTimePicker`); iOS inline spinner with Cancel/Apply buttons; Android system dialog picker; reminder list (label + time + red trash icon per card); native `Alert.alert` delete confirmation; `isAdding` guard prevents double-submit. Reminders sorted by `time` ASC (server-side, via `.order('time', { ascending: true })`).
+* **Action**: Updated `SettingsScreen.tsx` v3.12.0: added "Feed reminders" as a third toggle row in the Notifications card (greyed/disabled on Free tier via `opacity: 0.4`; active on Pro via `handleRemindersToggle`); `handleRemindersToggle` uses pessimistic UI — awaits Supabase confirmation before updating state (same pattern as Pro toggle); `receivesReminders` loaded from `user_households` via `getUserHouseholdReminders()` on `loadData()` and written into cache; `SettingsScreenCache` interface updated; Reminders section row now opens `FeedRemindersModal` (replacing the "Coming Soon" stub).
+* **Action**: Updated `types.ts` v1.3.0: `remindersEnabled` added to `NotificationPreferences`; `FeedReminder` interface updated to match Supabase shape — `IsActive` removed, `DateUpdated` removed, `Title` renamed to `Label`.
+* **Dependency added**: `@react-native-community/datetimepicker` — install via `npx expo install @react-native-community/datetimepicker`.
+* **Architectural Rule — Pessimistic UI for reminders toggle**: The "Feed reminders" toggle uses pessimistic UI — awaits Supabase confirmation before updating state. Rationale: preference changes must be correct before reflecting in UI, consistent with the Pro toggle pattern.
+* **Architectural Rule — Reminder opt-out scope**: `receives_reminders` on `user_households` is the sole per-member opt-out for reminders. There is no per-reminder toggle. OS-level notification scheduling (the actual alarm when the phone is locked) is not yet wired — requires `expo-notifications` and will be implemented alongside #2 (EAS Build). The Supabase persistence layer and modal UI are complete.
+* **Files changed**: `types.ts` v1.3.0, `database.ts` v4.3.0, `SettingsScreen.tsx` v3.12.0, NEW `FeedRemindersModal.tsx` v1.0.0.
+
+---
+
 ### Categorized Debt & Ghost Logic
 
 **1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**
@@ -496,3 +518,6 @@
 * **The Path Forward**: Expo EAS Build is a cloud-based build service that produces a real signed app bundle from Windows 11 — no Mac required. iOS: distribute via TestFlight for testing. Android: distribute via Google Play Internal Testing track.
 * **Why deferred**: EAS Build requires a dedicated setup session (Apple Developer account, EAS CLI, build configuration). All Expo Go-compatible items on the App Store Priority List will be completed first.
 * **The Risk**: Until a real build exists, push notifications (lock screen alerts triggered by other household members' actions) cannot be delivered. In-app real-time bells via Supabase WebSocket subscriptions remain the fallback for foreground notifications.
+
+---
+
