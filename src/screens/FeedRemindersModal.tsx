@@ -179,7 +179,7 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
 
         {/* ── Subtitle ── */}
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          To change who receives these reminders click on the Reminders toggle switch on the Members list.
+          To change these reminders click on the Feed Reminders toggle switch in the Notifications section.
         </Text>
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
@@ -374,8 +374,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: fontWeight.bold,
+    flex: 1,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    textAlign: 'center',
   },
   closeButton: {
     padding: spacing.xs,
