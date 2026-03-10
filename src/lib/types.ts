@@ -2,6 +2,7 @@
 // Version: 1.1.0 - Updated with Supabase history fields
 // Version: 1.2.0 - Notification: added targetUserId and senderUserId for targeted feed requests
 // Version: 1.3.0 - NotificationPreferences: added remindersEnabled; FeedReminder: migrated to Supabase shape (removed IsActive)
+// Version: 1.3.1 - Notification type union: added 'reminder'
 
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
@@ -61,7 +62,7 @@ export interface Pet {
 export interface Notification {
   id: string;
   householdId: string;
-  type: 'feeding' | 'member_joined' | 'pet_added' | 'member_removed' | 'feed_request';
+  type: 'feeding' | 'member_joined' | 'pet_added' | 'member_removed' | 'feed_request' | 'reminder';
   message: string;
   timestamp: string;
   read: boolean; // Computed per-user from notification_reads table

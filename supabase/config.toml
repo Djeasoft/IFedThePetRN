@@ -1,4 +1,10 @@
 
+[functions.process-reminders]
+enabled = true
+verify_jwt = true
+import_map = "./functions/process-reminders/deno.json"
+entrypoint = "./functions/process-reminders/index.ts"
+
 [functions.send-invite-email]
 enabled = true
 verify_jwt = true
