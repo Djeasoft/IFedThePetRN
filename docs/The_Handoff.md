@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Tuesday, 10 March 2026
+**Last Updated:** Wednesday, 11 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority.
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. Modal header fix verified iOS only — verify Android before marking complete.
 
 ---
 
@@ -132,6 +132,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#8** — Feedback link in Settings. `SettingsScreen.tsx` v3.10.0. 8 Mar.
 - [x] **#10** — Feed History modal redesign + iOS shadow fix. `StatusScreen.tsx` v3.10.3. 8 Mar.
 - [x] **#5** — Reminders toggle persists to Supabase. RLS UPDATE policy added to `user_households`. Verified 10 Mar.
+- [x] **Enhancement** — Global modal header style. `globalStyles.ts` v1.0.0 (new). `SettingsScreen.tsx` v3.13.0. `FeedRemindersModal.tsx` v1.1.0. X right-aligned, title centred. Verified iOS only — Android pending. 11 Mar.
 - [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
 - [ ] **#6** — T&C and Privacy Policy views
 - [ ] **#7** — How to section update
@@ -206,8 +207,9 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 **Current file versions:**
 - `App.tsx` v3.10.0
 - `StatusScreen.tsx` v3.10.7 (timestamp suppression window — own-device feed flicker fix)
-- `SettingsScreen.tsx` v3.12.0 (Feed reminders toggle in Notifications card; FeedRemindersModal wired; receivesReminders loaded from Supabase)
-- `FeedRemindersModal.tsx` v1.0.0 (NEW — reminders list, add form, native time picker, delete confirmation)
+- `SettingsScreen.tsx` v3.13.0 (modal headers use shared `modalHeaderStyles`; Settings main header X repositioned to right; spacer/title/close order corrected)
+- `FeedRemindersModal.tsx` v1.1.0 (modal header uses shared `modalHeaderStyles`; local header/headerTitle/closeButton styles removed)
+- `globalStyles.ts` v1.0.0 (NEW — shared `modalHeaderStyles`: three-column row layout, centred title, X right-aligned)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)

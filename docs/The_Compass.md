@@ -468,6 +468,18 @@
 * **Verified**: Toggle persists correctly across reloads. Verified on device, 10 March 2026.
 * **Files changed**: No code files. Supabase RLS policy added to `user_households` table.
 
+### 11 March 2026
+
+* **Milestone**: Global Modal Header Consistency Fix.
+* **Problem**: `SettingsScreen.tsx` and `FeedRemindersModal.tsx` had near-identical but duplicated modal header stylesheet classes. The close button (X) rendered on the left in both files. The heading text was not perfectly centred.
+* **Architecture Shift**: Introduced `src/styles/globalStyles.ts` as the first shared style module in the project. Established the pattern that shared cross-screen styles live here rather than being duplicated per file.
+* **Action**: Created `globalStyles.ts` v1.0.0 — exports `modalHeaderStyles` with a three-column row layout: `modalHeaderSpacer` (32px balancing weight, left), `modalTitle` (flex 1, centred, semibold), `modalCloseButton` (right). Padding and borders intentionally excluded — each call site applies its own.
+* **Action**: Updated `FeedRemindersModal.tsx` v1.0.0 → v1.1.0. Removed local `header`, `headerTitle`, `closeButton` styles (13 lines). Added spacer View before title. Imported and applied `modalHeaderStyles`.
+* **Action**: Updated `SettingsScreen.tsx` v3.12.0 → v3.13.0. Removed local `modalHeader`, `modalCloseButton`, `modalTitle` styles (9 lines). Applied `modalHeaderStyles` to all three modal headers (Invite Member, Add Pet, Select Household). Fixed Settings main screen header — JSX reordered from `[X][Settings][spacer]` to `[spacer][Settings][X]`, no stylesheet changes needed.
+* **Architectural Rule**: When two or more screens share structural UI patterns, extract to `globalStyles.ts`. Never duplicate — drift between call sites is the risk.
+* **Verified**: iOS only (11 Mar). Android verification pending.
+* **Files changed**: `src/styles/globalStyles.ts` (new, v1.0.0), `FeedRemindersModal.tsx` (v1.1.0), `SettingsScreen.tsx` (v3.13.0).
+
 ---
 
 ### Categorized Debt & Ghost Logic
@@ -561,4 +573,3 @@
 * **The Risk**: Until a real build exists, push notifications (lock screen alerts triggered by other household members' actions) cannot be delivered. In-app real-time bells via Supabase WebSocket subscriptions remain the fallback for foreground notifications.
 
 ---
-
