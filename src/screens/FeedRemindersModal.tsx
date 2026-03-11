@@ -1,5 +1,5 @@
 // FeedRemindersModal.tsx
-// Version: 1.0.0 - Feed reminders modal: list, add, delete. Household-scoped, Supabase-backed.
+// Version: 1.1.0 - Feed reminders modal: list, add, delete. Household-scoped, Supabase-backed.
 //
 // Flows supported:
 //   Flow 1 — Empty state → "Create your first reminder" → form → time picker → saved list
@@ -32,6 +32,7 @@ import {
 import { FeedReminder } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
+import { modalHeaderStyles } from '../styles/globalStyles';
 
 interface FeedRemindersModalProps {
   visible: boolean;
@@ -170,9 +171,10 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
       <View style={[styles.container, { backgroundColor: theme.background }]}>
 
         {/* ── Header ── */}
-        <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Feed Reminders</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+        <View style={[modalHeaderStyles.modalHeader, styles.headerExtras, { borderBottomColor: theme.border }]}>
+          <View style={modalHeaderStyles.modalHeaderSpacer} />
+          <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>Feed Reminders</Text>
+          <TouchableOpacity onPress={onClose} style={modalHeaderStyles.modalCloseButton}>
             <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
         </View>
@@ -364,23 +366,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // Padding and border applied to the shared modalHeader row
+  headerExtras: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-  },
-  closeButton: {
-    padding: spacing.xs,
   },
   subtitle: {
     fontSize: fontSize.sm,

@@ -19,6 +19,8 @@
 // Version: 3.12.0 - #4 + #5: Feed reminders — "Feed reminders" toggle in Notifications card;
 //                   Reminders section opens FeedRemindersModal (Pro only); toggle stored in
 //                   user_households.receives_reminders via setReceivesReminders/getReceivesReminders
+// Version: 3.13.0 - Shared modal header style: three-column layout for true title centring and
+//                   right-aligned close button, via globalStyles.modalHeaderStyles
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FeedRemindersModal } from './FeedRemindersModal';
@@ -75,6 +77,7 @@ import { signOut as authSignOut } from '../lib/auth';
 import { useTheme } from '../contexts/ThemeContext';
 import { Switch } from '../components/Switch';
 import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
+import { modalHeaderStyles } from '../styles/globalStyles';
 
 interface SettingsScreenCache {
   currentUser: User | null;
@@ -801,11 +804,11 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <View style={styles.headerSpacer} />
+          <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
+          <TouchableOpacity onPress={onClose} style={modalHeaderStyles.modalCloseButton}>
             <Ionicons name="close" size={24} color={theme.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
-          <View style={styles.headerSpacer} />
         </View>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -1692,8 +1695,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header with X close button */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+              <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
+                <View style={modalHeaderStyles.modalHeaderSpacer} />
+                <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>
                   Invite Member
                 </Text>
                 <TouchableOpacity
@@ -1702,7 +1706,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     setShowInviteModal(false);
                     setInviteEmail('');
                   }}
-                  style={styles.modalCloseButton}
+                  style={modalHeaderStyles.modalCloseButton}
                   disabled={isSendingInvite}
                 >
                   <Ionicons name="close" size={24} color={theme.textSecondary} />
@@ -1785,14 +1789,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header with X close button */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Add Pet</Text>
+              <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
+                <View style={modalHeaderStyles.modalHeaderSpacer} />
+                <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>Add Pet</Text>
                 <TouchableOpacity
                   onPress={() => {
                     setShowAddPetModal(false);
                     setNewPetName('');
                   }}
-                  style={styles.modalCloseButton}
+                  style={modalHeaderStyles.modalCloseButton}
                 >
                   <Ionicons name="close" size={24} color={theme.textSecondary} />
                 </TouchableOpacity>
@@ -1862,14 +1867,15 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>
+              <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
+                <View style={modalHeaderStyles.modalHeaderSpacer} />
+                <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>
                   Select Household
                 </Text>
                 <TouchableOpacity
                   onPress={() => setShowHouseholdSwitcher(false)}
                   disabled={switchingHousehold}
-                  style={styles.modalCloseButton}
+                  style={modalHeaderStyles.modalCloseButton}
                 >
                   <Ionicons name="close" size={24} color={theme.textSecondary} />
                 </TouchableOpacity>
@@ -2543,18 +2549,9 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xxl,
     padding: spacing.xl,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  // Spacing applied below the shared modalHeader row in dialog-style modals
+  modalHeaderSpacing: {
     marginBottom: spacing.lg,
-  },
-  modalCloseButton: {
-    padding: spacing.xs,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
   },
   modalInputGroup: {
     marginBottom: spacing.base,
