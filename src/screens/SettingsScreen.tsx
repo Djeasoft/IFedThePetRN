@@ -21,9 +21,12 @@
 //                   user_households.receives_reminders via setReceivesReminders/getReceivesReminders
 // Version: 3.13.0 - Shared modal header style: three-column layout for true title centring and
 //                   right-aligned close button, via globalStyles.modalHeaderStyles
+// Version: 3.14.0 - Priority #6: Legal rows now open in-app LegalModal (Privacy Policy + Terms of Service)
+//                   instead of external browser links
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FeedRemindersModal } from './FeedRemindersModal';
+import { LegalModal } from './LegalModal';
 import {
   View,
   Text,
@@ -135,6 +138,9 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
 
   // Feed Reminders modal
   const [showFeedRemindersModal, setShowFeedRemindersModal] = useState(false);
+
+  // Legal modal
+  const [legalModalType, setLegalModalType] = useState<'privacy' | 'terms' | null>(null);
 
   // Copy code feedback
   const [codeCopied, setCodeCopied] = useState(false);
@@ -1404,13 +1410,13 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
               <View style={[styles.card, { backgroundColor: theme.surface }]}>
                 <SettingsRow
                   label="Privacy Policy"
-                  onPress={() => handleOpenLink('https://ifedthepet.com/privacy')}
+                  onPress={() => setLegalModalType('privacy')}
                   showChevron
                 />
                 <View style={[styles.divider, { backgroundColor: theme.border }]} />
                 <SettingsRow
                   label="Terms of Service"
-                  onPress={() => handleOpenLink('https://ifedthepet.com/terms')}
+                  onPress={() => setLegalModalType('terms')}
                   showChevron
                 />
               </View>
@@ -1930,6 +1936,13 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             householdId={household.HouseholdID}
           />
         )}
+
+        {/* Legal Modal — Privacy Policy and Terms of Service */}
+        <LegalModal
+          visible={legalModalType !== null}
+          type={legalModalType ?? 'privacy'}
+          onClose={() => setLegalModalType(null)}
+        />
       </SafeAreaView>
     </Modal>
   );
