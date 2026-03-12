@@ -480,6 +480,17 @@
 * **Verified**: iOS only (11 Mar). Android verification pending.
 * **Files changed**: `src/styles/globalStyles.ts` (new, v1.0.0), `FeedRemindersModal.tsx` (v1.1.0), `SettingsScreen.tsx` (v3.13.0).
 
+### 12 March 2026
+
+**Milestone: #6 T&C — LegalModal built and verified (iOS + Android)**
+* **Action**: Created `LegalModal.tsx` (new file) — a `pageSheet` modal reusing `modalHeaderStyles` from `globalStyles.ts`. Tapping "Privacy Policy" or "Terms of Service" in the Settings Legal card opens the modal with the relevant page loaded via `react-native-webview`.
+* **URLs**: Privacy Policy → `https://ifedthepet.app/privacy-policy.html` · Terms of Service → `https://ifedthepet.app/terms-of-service.html`
+* **Dependency**: `react-native-webview` installed via `npx expo install react-native-webview` (SDK 54 compatible).
+* **iOS Bug Found & Fixed**: `onLoadStart` fires multiple times on iOS (once per sub-resource/redirect). Each call was resetting `loading: true`, but `onLoad` only fires once — leaving the spinner permanently visible after the content appeared. Fixed by removing `onLoadStart` and replacing `onLoad` with `onLoadEnd`. Android was unaffected.
+* **Final simplification**: Custom loading spinner and error state removed entirely. The native WebView handles its own loading presentation on both platforms. Component reduced to modal shell + header + `WebView` only.
+* **File versions**: `LegalModal.tsx` v2.2.0 (new file, iterated v1.0.0 → v2.2.0 in session). `SettingsScreen.tsx` unchanged at v3.13.0.
+* **Pattern note**: `react-native-webview` requires a native build — will not render in Expo Go. Same constraint as native push notifications (#2). WebView-based screens must be tested via EAS Build / `expo run:ios` / `expo run:android`.
+
 ---
 
 ### Categorized Debt & Ghost Logic
