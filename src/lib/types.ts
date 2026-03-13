@@ -3,6 +3,7 @@
 // Version: 1.2.0 - Notification: added targetUserId and senderUserId for targeted feed requests
 // Version: 1.3.0 - NotificationPreferences: added remindersEnabled; FeedReminder: migrated to Supabase shape (removed IsActive)
 // Version: 1.3.1 - Notification type union: added 'reminder'
+// Version: 1.4.0 - FeedReminder: added Enabled field; NotificationPreferences: removed remindersEnabled (moved to per-reminder toggle)
 
 export type InvitationStatus = 'Pending' | 'Active' | 'Declined';
 
@@ -25,7 +26,6 @@ export interface NotificationPreferences {
   memberJoinedNotifications: boolean;
   petAddedNotifications: boolean;
   memberRemovedNotifications: boolean;
-  remindersEnabled: boolean;
 }
 
 export interface Household {
@@ -91,6 +91,7 @@ export interface FeedReminder {
   HouseholdID: string;
   Label: string;
   Time: string; // Stored as "HH:mm"
+  Enabled: boolean; // false = muted for whole household
   DateCreated: string;
 }
 

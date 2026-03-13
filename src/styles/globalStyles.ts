@@ -1,8 +1,12 @@
 // Global Styles — Shared component styles used across multiple screens
 // Version: 1.0.0
+// Version: 1.1.0 - Re-export Switch component so screens can import shared UI elements from one place
 
 import { StyleSheet } from 'react-native';
 import { spacing, fontSize, fontWeight } from './theme';
+
+// Re-exported shared components — import from here instead of their individual paths
+export { Switch } from '../components/Switch';
 
 // Shared modal header styles.
 // Uses a three-column layout — [spacer] [centred title] [close button] — so that

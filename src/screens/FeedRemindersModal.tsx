@@ -1,13 +1,15 @@
 // FeedRemindersModal.tsx
-// Version: 1.1.0 - Feed reminders modal: list, add, delete. Household-scoped, Supabase-backed.
+// Version: 2.1.0 - Switch swapped from native react-native to custom themed Switch (via globalStyles).
 //
 // Flows supported:
-//   Flow 1 — Empty state → "Create your first reminder" → form → time picker → saved list
-//   Flow 2 — List state → "+ Add Reminder" → form → time picker → updated list
-//   Flow 3 — Delete → native Alert confirmation → removed from list
+//   Flow 1 — Admin, empty state → "Create your first reminder" → form → time picker → saved list
+//   Flow 2 — Admin, list state → "+ Add Reminder" → form → time picker → updated list
+//   Flow 3 — Admin, delete → native Alert confirmation → removed from list
+//   Flow 4 — Admin, toggle reminder off → mutes for whole household (optimistic, rollback on fail)
+//   Flow 5 — Non-admin → read-only list; toggle visible but disabled; no add/delete controls
 //
 // Time picker: native platform picker via @react-native-community/datetimepicker
-// Any household member can create and delete reminders.
+// Only the admin (isAdmin prop) can add, delete, or toggle reminders.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -28,16 +30,18 @@ import {
   getFeedRemindersByHouseholdId,
   addFeedReminder,
   deleteFeedReminder,
+  setReminderEnabled,
 } from '../lib/database';
 import { FeedReminder } from '../lib/types';
 import { useTheme } from '../contexts/ThemeContext';
 import { spacing, fontSize, fontWeight, borderRadius } from '../styles/theme';
-import { modalHeaderStyles } from '../styles/globalStyles';
+import { modalHeaderStyles, Switch } from '../styles/globalStyles';
 
 interface FeedRemindersModalProps {
   visible: boolean;
   onClose: () => void;
   householdId: string;
+  isAdmin: boolean;
 }
 
 // Helper: parse "HH:mm" string into a Date object for the picker
@@ -57,7 +61,7 @@ function dateToTimeString(date: Date): string {
 
 type ModalView = 'list' | 'form';
 
-export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemindersModalProps) {
+export function FeedRemindersModal({ visible, onClose, householdId, isAdmin }: FeedRemindersModalProps) {
   const { theme } = useTheme();
 
   // Data
@@ -157,6 +161,21 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
     );
   };
 
+  const handleToggleEnabled = async (reminder: FeedReminder, value: boolean) => {
+    // Optimistic update
+    setReminders((prev) =>
+      prev.map((r) => (r.ReminderID === reminder.ReminderID ? { ...r, Enabled: value } : r))
+    );
+    const success = await setReminderEnabled(reminder.ReminderID, value);
+    if (!success) {
+      // Rollback
+      setReminders((prev) =>
+        prev.map((r) => (r.ReminderID === reminder.ReminderID ? { ...r, Enabled: !value } : r))
+      );
+      Alert.alert('Error', 'Failed to update reminder. Please try again.');
+    }
+  };
+
   const canAdd = labelInput.trim().length > 0;
 
   if (!visible) return null;
@@ -181,7 +200,9 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
 
         {/* ── Subtitle ── */}
         <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-          To change these reminders click on the Feed Reminders toggle switch in the Notifications section.
+          {isAdmin
+            ? 'Add, delete or toggle reminders. Turning a reminder off mutes it for the whole household.'
+            : 'Only the admin can add, delete or mute reminders.'}
         </Text>
 
         <View style={[styles.divider, { backgroundColor: theme.border }]} />
@@ -199,13 +220,15 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
                 <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
                   No reminders yet
                 </Text>
-                <TouchableOpacity
-                  style={[styles.createButton, { backgroundColor: theme.primary }]}
-                  onPress={openForm}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.createButtonText}>Create your first reminder</Text>
-                </TouchableOpacity>
+                {isAdmin && (
+                  <TouchableOpacity
+                    style={[styles.createButton, { backgroundColor: theme.primary }]}
+                    onPress={openForm}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.createButtonText}>Create your first reminder</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               /* Reminder list */
@@ -217,7 +240,11 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
                 {reminders.map((reminder) => (
                   <View
                     key={reminder.ReminderID}
-                    style={[styles.reminderCard, { backgroundColor: theme.surface }]}
+                    style={[
+                      styles.reminderCard,
+                      { backgroundColor: theme.surface },
+                      !reminder.Enabled && styles.reminderCardMuted,
+                    ]}
                   >
                     <View style={styles.reminderCardLeft}>
                       <Text style={[styles.reminderLabel, { color: theme.text }]}>
@@ -227,27 +254,38 @@ export function FeedRemindersModal({ visible, onClose, householdId }: FeedRemind
                         {reminder.Time}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => handleDelete(reminder)}
-                      style={styles.deleteButton}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash" size={18} color={theme.error} />
-                    </TouchableOpacity>
+                    <View style={styles.reminderCardRight}>
+                      <Switch
+                        value={reminder.Enabled}
+                        onValueChange={(val) => { if (isAdmin) handleToggleEnabled(reminder, val); }}
+                        disabled={!isAdmin}
+                      />
+                      {isAdmin && (
+                        <TouchableOpacity
+                          onPress={() => handleDelete(reminder)}
+                          style={styles.deleteButton}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash" size={18} color={theme.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 ))}
 
-                {/* Add reminder button */}
-                <TouchableOpacity
-                  style={styles.addReminderRow}
-                  onPress={openForm}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="add" size={20} color={theme.primary} />
-                  <Text style={[styles.addReminderText, { color: theme.primary }]}>
-                    Add Reminder
-                  </Text>
-                </TouchableOpacity>
+                {/* Add reminder button — admin only */}
+                {isAdmin && (
+                  <TouchableOpacity
+                    style={styles.addReminderRow}
+                    onPress={openForm}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="add" size={20} color={theme.primary} />
+                    <Text style={[styles.addReminderText, { color: theme.primary }]}>
+                      Add Reminder
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </ScrollView>
             )}
           </>
@@ -431,6 +469,14 @@ const styles = StyleSheet.create({
   },
   reminderCardLeft: {
     flex: 1,
+  },
+  reminderCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reminderCardMuted: {
+    opacity: 0.45,
   },
   reminderLabel: {
     fontSize: fontSize.base,

@@ -1,9 +1,10 @@
 // process-reminders/index.ts
 // Supabase Edge Function — Processes scheduled feed reminders
 // Called by pg_cron every minute via net.http_post with service role Bearer token.
-// Finds reminders matching current HH:mm UTC, inserts a 'reminder' notification
-// per household member where receives_reminders = true.
-// Version: 1.0.0
+// Finds enabled reminders matching current HH:mm UTC, inserts a 'reminder' notification
+// for every active household member (receives_reminders filter removed — per-reminder enabled
+// flag now controls household-wide muting, v1.1.0).
+// Version: 1.1.0
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -30,6 +31,7 @@ Deno.serve(async (req) => {
       .from('reminders')
       .select('id, household_id, label')
       .eq('time', currentTime)
+      .eq('enabled', true)
 
     if (remindersError) {
       console.error('Error fetching reminders:', remindersError)
@@ -53,7 +55,6 @@ Deno.serve(async (req) => {
         .from('user_households')
         .select('user_id')
         .eq('household_id', reminder.household_id)
-        .eq('receives_reminders', true)
 
       if (membersError) {
         console.error(`Error fetching members for household ${reminder.household_id}:`, membersError)

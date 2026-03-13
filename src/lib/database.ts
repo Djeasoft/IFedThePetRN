@@ -8,6 +8,7 @@
 // Version: 4.1.0 - Sort members: main member first, then active by Creation Date + removeUserFromHousehold count added
 // Version: 4.2.0 - Targeted feed requests: targetUserId + senderUserId columns mapped; visibility filter applied in getAllNotifications and getUnreadNotificationsCount
 // Version: 4.3.0 - Feed reminders migrated from AsyncStorage to Supabase; setReceivesReminders/getReceivesReminders added
+// Version: 4.4.0 - FeedReminder: Enabled field mapped; setReminderEnabled added; setReceivesReminders/getReceivesReminders removed (per-reminder toggle replaces per-member toggle)
 
 import { supabase } from './supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1201,14 +1202,15 @@ export async function undoFeedingEvent(eventId: string): Promise<boolean> {
 
 // ===== FEED REMINDERS =====
 // Migrated from AsyncStorage to Supabase (v4.3.0)
-// Reminders are household-scoped. Each row: id, household_id, label, time (HH:mm), created_at.
-// Per-member opt-in is stored in user_households.receives_reminders (boolean).
+// Reminders are household-scoped. Each row: id, household_id, label, time (HH:mm), enabled, created_at.
+// enabled = false mutes the reminder for the whole household (v4.4.0 — replaces per-member receives_reminders).
 
 const mapFeedReminder = (data: any): FeedReminder => ({
   ReminderID: data.id,
   HouseholdID: data.household_id,
   Label: data.label,
   Time: data.time,
+  Enabled: data.enabled ?? true,
   DateCreated: data.created_at,
 });
 
@@ -1276,57 +1278,29 @@ export async function deleteFeedReminder(reminderId: string): Promise<boolean> {
 }
 
 /**
- * Update the receives_reminders flag for a user in a specific household.
- * Controls whether local notifications fire for this user.
+ * Toggle a reminder on or off for the whole household.
+ * enabled = false → process-reminders Edge Function skips this reminder entirely.
+ * Admin-only in the UI; RLS UPDATE policy enforces admin-only at DB level.
  */
-export async function setReceivesReminders(
-  userId: string,
-  householdId: string,
-  value: boolean
+export async function setReminderEnabled(
+  reminderId: string,
+  enabled: boolean
 ): Promise<boolean> {
   try {
     const { error } = await supabase
-      .from('user_households')
-      .update({ receives_reminders: value })
-      .eq('user_id', userId)
-      .eq('household_id', householdId);
+      .from('reminders')
+      .update({ enabled })
+      .eq('id', reminderId);
 
     if (error) {
-      console.error('Error updating receives_reminders:', error.message);
+      console.error('Error updating reminder enabled:', error.message);
       return false;
     }
 
     return true;
   } catch (error) {
-    console.error('Error in setReceivesReminders:', error);
+    console.error('Error in setReminderEnabled:', error);
     return false;
-  }
-}
-
-/**
- * Get the receives_reminders flag for a user in a specific household.
- */
-export async function getReceivesReminders(
-  userId: string,
-  householdId: string
-): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from('user_households')
-      .select('receives_reminders')
-      .eq('user_id', userId)
-      .eq('household_id', householdId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error getting receives_reminders:', error.message);
-      return true; // Default to true — opt-in by default
-    }
-
-    return data?.receives_reminders ?? true;
-  } catch (error) {
-    console.error('Error in getReceivesReminders:', error);
-    return true;
   }
 }
 

@@ -23,6 +23,7 @@
 //                   right-aligned close button, via globalStyles.modalHeaderStyles
 // Version: 3.14.0 - Priority #6: Legal rows now open in-app LegalModal (Privacy Policy + Terms of Service)
 //                   instead of external browser links
+// Version: 3.15.0 - Item #14: Remove "Feed reminders" toggle from Notifications card; pass isAdmin to FeedRemindersModal
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FeedRemindersModal } from './FeedRemindersModal';
@@ -72,8 +73,6 @@ import {
   getCurrentHouseholdId,
   clearCurrentUserId,
   clearCurrentHouseholdId,
-  setReceivesReminders,
-  getReceivesReminders,
 } from '../lib/database';
 import { User, Household, Pet, TIER_LIMITS } from '../lib/types';
 import { signOut as authSignOut } from '../lib/auth';
@@ -89,7 +88,6 @@ interface SettingsScreenCache {
   pets: Pet[];
   feedingNotifications: boolean;
   memberJoinedNotifications: boolean;
-  remindersEnabled: boolean;
 }
 
 interface SettingsScreenProps {
@@ -134,8 +132,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
   // Notification preferences
   const [feedingNotifications, setFeedingNotifications] = useState(true);
   const [memberJoinedNotifications, setMemberJoinedNotifications] = useState(true);
-  const [remindersEnabled, setRemindersEnabled] = useState(true);
-
   // Feed Reminders modal
   const [showFeedRemindersModal, setShowFeedRemindersModal] = useState(false);
 
@@ -186,7 +182,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           setPets(cached.pets);
           setFeedingNotifications(cached.feedingNotifications);
           setMemberJoinedNotifications(cached.memberJoinedNotifications);
-          setRemindersEnabled(cached.remindersEnabled ?? true);
           setLoading(false); // Show cached data instantly
         }
       }
@@ -226,15 +221,13 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
         setAllHouseholds(households);
 
         // FIX: Parallel fetch of members and pets (2x faster!)
-        const [householdMembers, householdPets, receivesReminders] = await Promise.all([
+        const [householdMembers, householdPets] = await Promise.all([
           getMembersOfHousehold(hh.HouseholdID),
           getPetsByHouseholdId(hh.HouseholdID),
-          userId ? getReceivesReminders(userId, hh.HouseholdID) : Promise.resolve(true),
         ]);
 
         setMembers(sortMembers(householdMembers));
         setPets(householdPets);
-        setRemindersEnabled(receivesReminders);
 
         // Step 3: Write fresh data to cache
         await setCachedScreenData<SettingsScreenCache>(CACHE_KEYS.SETTINGS_SCREEN, {
@@ -244,7 +237,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
           pets: householdPets,
           feedingNotifications: feedNotifs,
           memberJoinedNotifications: memberNotifs,
-          remindersEnabled: receivesReminders,
         });
       }
     } catch (error) {
@@ -513,23 +505,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       await updateUser(currentUser.UserID, { NotificationPreferences: newPrefs });
     } catch (error) {
       console.error('Error updating notification preferences:', error);
-    }
-  };
-
-  // Toggle whether this user receives household feed reminders.
-  // Stored in user_households.receives_reminders — pessimistic UI (awaits DB confirmation).
-  const handleRemindersToggle = async (value: boolean) => {
-    if (!currentUser || !household) return;
-    setRemindersEnabled(value); // Optimistic — feels instant
-    try {
-      const success = await setReceivesReminders(currentUser.UserID, household.HouseholdID, value);
-      if (!success) {
-        // Roll back on failure
-        setRemindersEnabled(!value);
-      }
-    } catch (error) {
-      console.error('Error updating reminders preference:', error);
-      setRemindersEnabled(!value);
     }
   };
 
@@ -1229,25 +1204,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                     onValueChange={(v) => handleNotificationToggle('memberJoined', v)}
                   />
                 </TouchableOpacity>
-                <View style={[styles.divider, { backgroundColor: theme.border }]} />
-                {/* Feed reminders toggle — disabled on Free tier */}
-                <View
-                  style={[styles.notificationRow, !isPro && { opacity: 0.4 }]}
-                >
-                  <View style={styles.notificationRowLeft}>
-                    <Text style={[styles.notificationRowLabel, { color: theme.text }]}>
-                      Feed reminders
-                    </Text>
-                    <Text style={[styles.notificationRowDesc, { color: theme.textSecondary }]}>
-                      Get reminded to feed my pet
-                    </Text>
-                  </View>
-                  <Switch
-                    value={isPro ? remindersEnabled : false}
-                    onValueChange={isPro ? handleRemindersToggle : undefined}
-                    disabled={!isPro}
-                  />
-                </View>
               </View>
 
               {/* Reminders Section */}
@@ -1618,19 +1574,19 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
                   theme={theme}
                 >
                   <View style={styles.accordionContent}>
-                    <Text style={[styles.accordionSubtitle, { color: theme.text }]}>Creating Feed Reminders</Text>
+                    <Text style={[styles.accordionSubtitle, { color: theme.text }]}>Creating Feed Reminders (Admin only)</Text>
                     <Text style={[styles.accordionText, { color: theme.textSecondary }]}>
                       1. Go to Settings → Reminders → Feed reminders{'\n'}
-                      2. Tap "Add reminder" to create a new reminder{'\n'}
-                      3. Enter a title (e.g., "Morning feeding"){'\n'}
+                      2. Tap "Add Reminder" to create a new reminder{'\n'}
+                      3. Enter a label (e.g., "Morning feeding"){'\n'}
                       4. Set the time you want to be reminded{'\n'}
                       5. Tap "Add" to save the reminder
                     </Text>
-                    <Text style={[styles.accordionSubtitle, { color: theme.text, marginTop: spacing.md }]}>Controlling Who Gets Reminders</Text>
+                    <Text style={[styles.accordionSubtitle, { color: theme.text, marginTop: spacing.md }]}>Muting a Reminder</Text>
                     <Text style={[styles.accordionText, { color: theme.textSecondary }]}>
-                      • In Settings → Members, you'll see a "Reminders" toggle{'\n'}
-                      • Toggle ON for members who should receive reminders{'\n'}
-                      • Only the Admin can control these settings
+                      • Tap the toggle on any reminder to mute or unmute it{'\n'}
+                      • Muting a reminder stops it for the whole household{'\n'}
+                      • Only the Admin can mute or unmute reminders
                     </Text>
                     <Text style={[styles.accordionTip, { color: theme.textTertiary }]}>
                       Feed reminders are a Pro feature. Create unlimited custom reminders!
@@ -1934,6 +1890,7 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             visible={showFeedRemindersModal}
             onClose={() => setShowFeedRemindersModal(false)}
             householdId={household.HouseholdID}
+            isAdmin={isMainMember}
           />
         )}
 
