@@ -20,6 +20,7 @@
 // Version: 3.10.6 - Fix: remove premature finally counter reset; add 5s safety timeout; unique Supabase channel names in database.ts
 // Version: 3.10.7 - Fix: replace counter-based suppression with timestamp window (suppressUntilRef) — eliminates broadcast-count dependency, no timer infrastructure needed, cross-device updates always pass through after 3s window
 // Version: 3.10.6 - Fix: remove premature finally counter reset (broadcasts arrive after finally on high-latency networks); add 5s safety timeout instead. Fix non-unique Supabase channel names in database.ts (status:pets/feeding_events scoped by householdId)
+// Version: 3.10.8 - UI: reduce contentContainer paddingHorizontal 24→16; remove maxWidth 320 cap from statusCard, petCheckboxContainer, historySection, upgradeSection; tighten statusCard shadow (radius 8→4, opacity 0.1→0.08, offset height 2→1, elevation 4→2)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -1001,7 +1002,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 32,
     alignItems: 'center',
@@ -1064,12 +1065,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
     width: '100%',
-    maxWidth: 320,
   },
   statusLabel: {
     fontSize: 12,
@@ -1108,12 +1108,11 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 32,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
     width: '100%',
-    maxWidth: 320,
   },
   // Full-width row for "Feed all"
   checkboxRow: {
@@ -1186,7 +1185,6 @@ const styles = StyleSheet.create({
   // History Section
   historySection: {
     width: '100%',
-    maxWidth: 320,
     marginBottom: 24,
   },
   historyHeader: {
@@ -1273,7 +1271,6 @@ const styles = StyleSheet.create({
   // Upgrade Section
   upgradeSection: {
     width: '100%',
-    maxWidth: 320,
     alignItems: 'center',
   },
   adBanner: {
