@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
 **Last Updated:** Friday, 13 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. #14 Feed Reminders redesign fully complete and verified. #6 T&C fully complete and verified on Expo Go (iOS + Android).
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. StatusCard UI polish complete (v3.10.8). #14 Feed Reminders redesign fully complete and verified. #6 T&C fully complete and verified on Expo Go (iOS + Android).
 
 ---
 
@@ -73,6 +73,7 @@ What is verified and working:
 - Global modal header style — `globalStyles.ts` v1.0.0, X right-aligned, title centred. Verified iOS + Android ✅ *(13 Mar)*
 - Feed Reminders redesign (#14) — admin-only create/delete/toggle. Per-reminder `enabled` toggle (household-wide mute). Non-admins see read-only view. `reminders.enabled` column in Supabase. RLS UPDATE policy (admin only). `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar ✅
 - Custom animated Switch in `FeedRemindersModal` — matches Settings screen toggles. `globalStyles.ts` v1.1.0 (re-exports `Switch` from `src/components/Switch.tsx`). Verified 13 Mar ✅
+- StatusCard UI polish — `contentContainer` paddingHorizontal reduced 24→16; `maxWidth: 320` cap removed from `statusCard`, `petCheckboxContainer`, `historySection`, `upgradeSection`; `statusCard` + `petCheckboxContainer` shadow tightened (radius 8→4, opacity 0.1→0.08, elevation 4→2). `StatusScreen.tsx` v3.10.8 ✅ *(13 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -157,6 +158,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#6** — T&C and Privacy Policy. `LegalModal.tsx` v2.2.0 (new). `react-native-webview` installed and confirmed working in Expo Go. WebView loads live URLs. iOS `onLoadStart` bug fixed. 12–13 Mar.
 - [x] **#14** — Feed Reminders redesign: admin-only write, per-reminder enabled toggle (household-wide mute), `receives_reminders` removed from Settings. `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar.
 - [x] **Enhancement** — Custom animated Switch in `FeedRemindersModal`. `globalStyles.ts` v1.1.0 (re-exports Switch). Verified 13 Mar.
+- [x] **UI Polish** — StatusCard side padding reduced, `maxWidth` cap removed from all StatusScreen cards, shadow tightened on `statusCard` + `petCheckboxContainer`. `StatusScreen.tsx` v3.10.8. 13 Mar.
 - [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
 - [ ] **#7** — How to section update
 - [ ] **#9** — Supabase RLS
@@ -231,7 +233,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 
 **Current file versions:**
 - `App.tsx` v3.10.0
-- `StatusScreen.tsx` v3.10.7 (timestamp suppression window — own-device feed flicker fix)
+- `StatusScreen.tsx` v3.10.8 (UI polish — reduced side padding, removed maxWidth cap on all cards, tighter shadow on statusCard + petCheckboxContainer)
 - `SettingsScreen.tsx` v3.15.0 (receives_reminders toggle removed from Notifications card; isAdmin passed to FeedRemindersModal)
 - `FeedRemindersModal.tsx` v2.1.0 (admin-only write; per-reminder enabled toggle; custom animated Switch)
 - `globalStyles.ts` v1.1.0 (shared `modalHeaderStyles`; re-exports `Switch` from `src/components/Switch.tsx`)

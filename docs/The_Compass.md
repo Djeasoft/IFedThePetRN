@@ -511,6 +511,19 @@
 
 ---
 
+**Milestone: StatusCard UI Polish — reduced padding, wider cards, tighter shadow**
+* **Context**: Post-meeting decision to bring the StatusScreen cards visually closer to the screen edges and reduce the shadow spread on the status card. Not on the App Store Priority List — addressed as a standalone UI session.
+* **Changes:**
+  - `contentContainer`: `paddingHorizontal` reduced from `24` to `16` — all StatusScreen content sits closer to the screen edges.
+  - `statusCard`: `maxWidth: 320` removed; shadow tightened — `shadowRadius: 8 → 4`, `shadowOpacity: 0.1 → 0.08`, `shadowOffset.height: 2 → 1`, `elevation: 4 → 2`.
+  - `petCheckboxContainer`: same shadow tightening applied; `maxWidth: 320` removed.
+  - `historySection`: `maxWidth: 320` removed.
+  - `upgradeSection`: `maxWidth: 320` removed.
+* **Design rule established**: Card width on StatusScreen is now constrained only by `contentContainer` horizontal padding (16px each side), not by a fixed `maxWidth`. This gives a consistent edge-to-edge feel across all device sizes without a hard pixel cap.
+* **Files changed**: `StatusScreen.tsx` v3.10.7 → v3.10.8.
+
+---
+
 ### Categorized Debt & Ghost Logic
 
 **1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**
