@@ -493,6 +493,24 @@
 
 ---
 
+### 13 March 2026 (evening)
+
+**Milestone: #14 Feed Reminders redesign — admin-only write, per-reminder household mute**
+* **Architecture Shift**: Per-member reminder opt-out (`receives_reminders` on `user_households`) replaced by a per-reminder `enabled` flag (`reminders.enabled` in Supabase). Toggling a reminder off mutes it for the whole household. Admin-only enforcement via Supabase RLS UPDATE policy.
+* **Actions:**
+  - `reminders` table: added `enabled boolean NOT NULL DEFAULT true` column (SQL migration run manually in Supabase dashboard).
+  - RLS UPDATE policy added to `reminders`: only `is_main_member = true` users can update (enforced via `user_households` + `users` join on `auth.uid()`).
+  - `FeedRemindersModal.tsx` v2.1.0: `isAdmin` prop added. Admin sees create/delete/toggle; non-admins see read-only view with greyed-out Switch. Custom animated `Switch` (from `src/components/Switch.tsx` via `globalStyles.ts` re-export) replaces native RN Switch. `handleToggleEnabled` uses optimistic update + rollback pattern.
+  - `SettingsScreen.tsx` v3.15.0: `receives_reminders` toggle removed from Notifications card entirely; `isAdmin={isMainMember}` passed to `FeedRemindersModal`.
+  - `database.ts` v4.4.0: `setReminderEnabled(reminderId, enabled)` added (updates `reminders.enabled`); `setReceivesReminders` and `getReceivesReminders` removed.
+  - `types.ts` v1.4.0: `FeedReminder.Enabled: boolean` added; `remindersEnabled` removed from `NotificationPreferences` interface.
+  - `process-reminders` Edge Function v1.1.0: `.eq('enabled', true)` added to reminder query; `receives_reminders` filter removed from members query — all household members now receive reminder notifications.
+  - `globalStyles.ts` v1.1.0: re-exports `Switch` from `src/components/Switch.tsx` as a shared convenience import.
+* **Debt added**: D14 — `receives_reminders` column on `user_households` now unused. D15 — RLS INSERT/DELETE on `reminders` still allows any household member (should be admin-only).
+* **Verified**: Jarques + Dan, 13 March 2026.
+
+---
+
 ### Categorized Debt & Ghost Logic
 
 **1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**

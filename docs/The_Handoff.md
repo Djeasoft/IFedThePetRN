@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
 **Last Updated:** Friday, 13 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. Modal header fix verified iOS + Android ✅. #6 T&C fully complete and verified on Expo Go (iOS + Android).
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. #14 Feed Reminders redesign fully complete and verified. #6 T&C fully complete and verified on Expo Go (iOS + Android).
 
 ---
 
@@ -71,12 +71,27 @@ What is verified and working:
 - pg_cron job scheduled every minute — confirmed `succeeded` status in `cron.job_run_details` ✅ *(10 Mar)*
 - Privacy Policy and Terms of Service modals — `LegalModal.tsx` built, `react-native-webview` installed, content loads from live URLs ✅ *(12 Mar)*
 - Global modal header style — `globalStyles.ts` v1.0.0, X right-aligned, title centred. Verified iOS + Android ✅ *(13 Mar)*
+- Feed Reminders redesign (#14) — admin-only create/delete/toggle. Per-reminder `enabled` toggle (household-wide mute). Non-admins see read-only view. `reminders.enabled` column in Supabase. RLS UPDATE policy (admin only). `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar ✅
+- Custom animated Switch in `FeedRemindersModal` — matches Settings screen toggles. `globalStyles.ts` v1.1.0 (re-exports `Switch` from `src/components/Switch.tsx`). Verified 13 Mar ✅
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
 - OS-level reminder scheduling (alarm when phone is locked) not yet wired — requires EAS Build + `expo-notifications` ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 Feb via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Invite flow verified 27 Feb. Bug fixes verified 28 Feb. Android safe area + logo verified 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar. Feed button flicker fix verified 9 Mar. Reminders modal + reminder notifications verified on device (Expo Go), 10 Mar. Reminders toggle persistence verified (RLS fix), 10 Mar. LegalModal verified Android + iOS (iOS WebView onLoadStart bug fixed), 12 Mar. Modal header fix verified Android, 13 Mar.
+**Tested by:** Dan + Jamie (Henry) on 20 Feb via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Invite flow verified 27 Feb. Bug fixes verified 28 Feb. Android safe area + logo verified 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar. Feed button flicker fix verified 9 Mar. Reminders modal + reminder notifications verified on device (Expo Go), 10 Mar. Reminders toggle persistence verified (RLS fix), 10 Mar. LegalModal verified Android + iOS (iOS WebView onLoadStart bug fixed), 12 Mar. Modal header fix verified Android, 13 Mar. #14 Feed Reminders redesign (admin-only write, per-reminder enabled toggle) verified Jarques + Dan, 13 Mar.
+
+**Testing**  
+**Date:** 13 March 2026  
+**Jarques + Dan**   
+
+    1. Testing the fed big red, it works now that all devices do not flicker anymore
+
+    2 Feed Reminders
+
+        2.1 Model screen is working, it shows
+        2.2 Notification for Feed reminders the cron job is working
+
+    3. 
 
 ---
 
@@ -97,6 +112,10 @@ What is **not** working:
 | 9 | Supabase RLS | 🔴 Major | Must fix before go live — unrestricted DB access via anon key currently. |
 | 10 | ~~View History screen~~ | ✅ Done | Feed History modal redesigned to match Dan's Figma. iOS shadow fixed. `StatusScreen.tsx` v3.10.3. |
 | I11 | Adding a new household | 🟡 Medium | Household island button to add a new household via invitation code (e.g. pet sitter scenario). |
+| 11 | New one | 🔴 Major | Pro mode does not have the upgrade to pro over the feed events on the status screen |
+| 12 | Time Zone | 🔴 Major | need to do this still |
+| 13 | Sounds alerts to all when it should only go to the receiver, when asked |
+| 14 | ~~Feed Reminders Big change~~ | ✅ Done | Admin-only create/delete/toggle. Per-reminder `enabled` toggle (household-wide mute). Non-admins see read-only view. `reminders.enabled` column in Supabase. RLS UPDATE policy (admin only). Custom animated Switch. `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0, `globalStyles.ts` v1.1.0. Verified 13 Mar. |
 
 ---
 
@@ -120,7 +139,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 | I12 | Notifications 30-day cleanup | 🟡 Medium | Confirm auto-cleanup function is actively wired and running. |
 | I14 | Defaults back to "Our Pet" on free tier downgrade | 🟡 Medium | When main member downgrades, remove extra pets and restore default "Our Pet". |
 | I15 | Rate our app | 🟡 Minor | Opens App Store rating prompt. |
-
+| I16 | Notification per member set only for the member | 
 ---
 
 ## 5. WHAT'S NEXT?
@@ -136,6 +155,8 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#5** — Reminders toggle persists to Supabase. RLS UPDATE policy added to `user_households`. Verified 10 Mar.
 - [x] **Enhancement** — Global modal header style. `globalStyles.ts` v1.0.0 (new). `SettingsScreen.tsx` v3.13.0. `FeedRemindersModal.tsx` v1.1.0. X right-aligned, title centred. Verified iOS + Android ✅. 11–13 Mar.
 - [x] **#6** — T&C and Privacy Policy. `LegalModal.tsx` v2.2.0 (new). `react-native-webview` installed and confirmed working in Expo Go. WebView loads live URLs. iOS `onLoadStart` bug fixed. 12–13 Mar.
+- [x] **#14** — Feed Reminders redesign: admin-only write, per-reminder enabled toggle (household-wide mute), `receives_reminders` removed from Settings. `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar.
+- [x] **Enhancement** — Custom animated Switch in `FeedRemindersModal`. `globalStyles.ts` v1.1.0 (re-exports Switch). Verified 13 Mar.
 - [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
 - [ ] **#7** — How to section update
 - [ ] **#9** — Supabase RLS
@@ -160,6 +181,8 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 | D11 | Native push notifications require EAS Build — cannot be tested in Expo Go. Use Expo EAS Build (cloud-based, works from Windows 11). Test iOS via TestFlight, Android via Google Play Internal Testing. Also needed for OS-level reminder scheduling (`expo-notifications`). | Before #2 can be built |
 | D12 | Reminder times stored as `HH:mm` text matched in UTC — users in non-UTC timezones will see reminders fire at wrong local time | Before launch |
 | D13 | pg_cron service role JWT hardcoded in cron job SQL command — rotate this when rotating the service role key (D6) | Before launch |
+| D14 | `receives_reminders` column on `user_households` is now unused — all reminder muting uses `reminders.enabled` instead | Before launch |
+| D15 | RLS INSERT and DELETE policies on `reminders` table still allow any household member — should be admin-only (`is_main_member = true`) | Before launch |
 
 ---
 
@@ -194,8 +217,8 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - Bug classification → three tiers: Blocker Bug (stops the process), Bug (wrong but not blocking), Enhancement (improvement to correctly working feature).
 - Targeted notification visibility rule → `feed_request` type: both `getAllNotifications` and `getUnreadNotificationsCount` must apply the same visibility filter (sender or target only). If one is updated, the other must be too.
 - Supabase channel naming rule → channels scoped by household: `status:pets:${householdId}`, `status:feeding_events:${householdId}`. Prevents channel object reuse across household switches.
-- Reminder opt-out rule → `receives_reminders` on `user_households` is the sole per-member opt-out for reminders. No per-reminder toggle. Pessimistic UI on the toggle. OS-level scheduling via `expo-notifications` deferred to EAS Build phase.
-- Reminder notification architecture → server-side only. `process-reminders` Edge Function called by `pg_cron` every minute. Queries `reminders` table for rows where `time = HH:mm UTC`. For each match, inserts a `reminder` type notification per household member where `receives_reminders = true`, with `target_user_id` set to that member's user_id. Real-time subscription on `notifications` handles bell badge + chime client-side — no polling. `target_user_id` is set, so the existing visibility filter in `getAllNotifications` and `getUnreadNotificationsCount` handles `reminder` type correctly without type-specific changes. Forward-compatible with native push (Phase B) — push call slots into the same Edge Function alongside the DB insert.
+- Reminder mute rule → `reminders.enabled` boolean (Supabase) is the sole mute mechanism — toggling off disables the reminder for the whole household. Only admins (`is_main_member = true`) can update it, enforced by RLS UPDATE policy. `receives_reminders` on `user_households` is now unused (D14). OS-level scheduling via `expo-notifications` deferred to EAS Build phase.
+- Reminder notification architecture → server-side only. `process-reminders` Edge Function called by `pg_cron` every minute. Queries `reminders` table for rows where `time = HH:mm UTC` and `enabled = true`. For each match, inserts a `reminder` type notification per household member (all active members — `receives_reminders` filter removed in v1.1.0), with `target_user_id` set to that member's user_id. Real-time subscription on `notifications` handles bell badge + chime client-side — no polling. `target_user_id` is set, so the existing visibility filter in `getAllNotifications` and `getUnreadNotificationsCount` handles `reminder` type correctly without type-specific changes. Forward-compatible with native push (Phase B) — push call slots into the same Edge Function alongside the DB insert.
 - pg_cron auth pattern → the cron job SQL passes the service role JWT as a hardcoded Bearer token in the `net.http_post` headers. `current_setting('app.service_role_key')` does NOT work — Supabase does not support that database parameter. Always hardcode the JWT directly in the cron schedule command. Remember to rotate this when rotating D6.
 
 **Key naming to know:**
@@ -209,14 +232,14 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 **Current file versions:**
 - `App.tsx` v3.10.0
 - `StatusScreen.tsx` v3.10.7 (timestamp suppression window — own-device feed flicker fix)
-- `SettingsScreen.tsx` v3.13.0 (modal headers use shared `modalHeaderStyles`; Settings main header X repositioned to right; spacer/title/close order corrected)
-- `FeedRemindersModal.tsx` v1.1.0 (modal header uses shared `modalHeaderStyles`; local header/headerTitle/closeButton styles removed)
-- `globalStyles.ts` v1.0.0 (NEW — shared `modalHeaderStyles`: three-column row layout, centred title, X right-aligned)
+- `SettingsScreen.tsx` v3.15.0 (receives_reminders toggle removed from Notifications card; isAdmin passed to FeedRemindersModal)
+- `FeedRemindersModal.tsx` v2.1.0 (admin-only write; per-reminder enabled toggle; custom animated Switch)
+- `globalStyles.ts` v1.1.0 (shared `modalHeaderStyles`; re-exports `Switch` from `src/components/Switch.tsx`)
 - `NotificationsPanel.tsx` v2.3.0
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)
-- `types.ts` v1.3.1 (`remindersEnabled` in `NotificationPreferences`; `FeedReminder` updated to Supabase shape — `IsActive`/`DateUpdated` removed, `Title` → `Label`; `'reminder'` added to Notification type union)
-- `database.ts` v4.3.0 — AsyncStorage reminder functions replaced with Supabase; `mapFeedReminder` added; `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder` rewritten; `setReceivesReminders` + `getReceivesReminders` added; `FEED_REMINDERS` storage key removed
+- `types.ts` v1.4.0 (`FeedReminder.Enabled` added; `remindersEnabled` removed from `NotificationPreferences`; `'reminder'` in Notification type union)
+- `database.ts` v4.4.0 — `setReminderEnabled` added; `setReceivesReminders` and `getReceivesReminders` removed; `mapFeedReminder` maps `enabled` field
 - `LegalModal.tsx` v2.2.0 (NEW) — Privacy Policy + Terms of Service pageSheet modal; WebView loads live URLs; no custom loading/error states; confirmed working in Expo Go
 
 **Supabase:**
@@ -224,7 +247,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - Tables with real-time enabled: `pets`, `feeding_events`, `households`, `user_households`, `notifications`
 - Tables without real-time (not needed): `reminders`, `users`
 - Extensions enabled: `pg_cron`, `pg_net`
-- Edge Functions deployed: `send-invite-email`, `claim-invite`, `process-reminders` (v1.0.0 — deployed and verified 10 Mar)
+- Edge Functions deployed: `send-invite-email`, `claim-invite`, `process-reminders` (v1.1.0 — `enabled` filter added, `receives_reminders` filter removed, 13 Mar)
 - pg_cron job: `process-reminders-every-minute` — schedule `* * * * *` — status confirmed `succeeded`
 - From address: `noreply@ifedthepet.app`
 
