@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Thursday, 12 March 2026
+**Last Updated:** Friday, 13 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. #6 T&C complete. Modal header fix verified iOS only — verify Android before marking complete.
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. Modal header fix verified iOS + Android ✅. #6 T&C fully complete and verified on Expo Go (iOS + Android).
 
 ---
 
@@ -70,12 +70,13 @@ What is verified and working:
 - `process-reminders` Edge Function deployed and verified — reminder notifications fire on device via Expo Go ✅ *(10 Mar)*
 - pg_cron job scheduled every minute — confirmed `succeeded` status in `cron.job_run_details` ✅ *(10 Mar)*
 - Privacy Policy and Terms of Service modals — `LegalModal.tsx` built, `react-native-webview` installed, content loads from live URLs ✅ *(12 Mar)*
+- Global modal header style — `globalStyles.ts` v1.0.0, X right-aligned, title centred. Verified iOS + Android ✅ *(13 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
 - OS-level reminder scheduling (alarm when phone is locked) not yet wired — requires EAS Build + `expo-notifications` ❌
 
-**Tested by:** Dan + Jamie (Henry) on 20 Feb via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Invite flow verified 27 Feb. Bug fixes verified 28 Feb. Android safe area + logo verified 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar. Feed button flicker fix verified 9 Mar. Reminders modal + reminder notifications verified on device (Expo Go), 10 Mar. Reminders toggle persistence verified (RLS fix), 10 Mar. LegalModal verified Android + iOS (iOS WebView onLoadStart bug fixed), 12 Mar.
+**Tested by:** Dan + Jamie (Henry) on 20 Feb via Expo Go. Real-time bell verified Jarques iPhone + Android, 27 Feb. Invite flow verified 27 Feb. Bug fixes verified 28 Feb. Android safe area + logo verified 5 Mar. Bug 11 + I13 verified 5 Mar. Feed History cards verified iOS + Android, 8 Mar. Feed button flicker fix verified 9 Mar. Reminders modal + reminder notifications verified on device (Expo Go), 10 Mar. Reminders toggle persistence verified (RLS fix), 10 Mar. LegalModal verified Android + iOS (iOS WebView onLoadStart bug fixed), 12 Mar. Modal header fix verified Android, 13 Mar.
 
 ---
 
@@ -90,7 +91,7 @@ What is **not** working:
 | 3 | ~~Ask to feed — target specific member~~ | ✅ Done | `target_user_id` + `sender_user_id` columns. Visibility filter in both notification queries. `types.ts` v1.2.0, `database.ts` v4.2.0, `SettingsScreen.tsx` v3.9.0. |
 | 4 | ~~Reminders — modal + Supabase persistence + notification firing~~ | ✅ Done | `FeedRemindersModal.tsx` v1.0.0. `reminders` table. `database.ts` v4.3.0. `process-reminders` Edge Function deployed and verified. pg_cron scheduled every minute. Notifications fire on device. Timezone note: times stored as HH:mm UTC — offset handling needed before launch (D12). |
 | 5 | ~~Reminders — notification toggle per member~~ | ✅ Done | "Feed reminders" toggle saves correctly to Supabase. Root cause: missing RLS UPDATE policy on `user_households` — silent 0-row update, no error returned. Fixed by adding policy allowing members to update their own row (scoped via `users.auth_user_id = auth.uid()`). `SettingsScreen.tsx` v3.12.0. Verified 10 Mar. |
-| 6 | ~~T&C~~ | ✅ Done | `LegalModal.tsx` v2.2.0 (NEW). `react-native-webview` installed. Privacy Policy + Terms of Service load from live URLs in a pageSheet modal. iOS `onLoadStart` multi-fire bug fixed. 12 Mar. |
+| 6 | ~~T&C~~ | ✅ Done | `LegalModal.tsx` v2.2.0 (NEW). `react-native-webview` installed. Privacy Policy + Terms of Service load from live URLs in a pageSheet modal. iOS `onLoadStart` multi-fire bug fixed. `react-native-webview` confirmed working in Expo Go — no native build required. Verified iOS + Android, 12–13 Mar. |
 | 7 | How to section | 🔴 Major | Needs to be updated. |
 | 8 | ~~Support on Settings~~ | ✅ Done | "Give your feedback" tappable mailto link. `SettingsScreen.tsx` v3.10.0. |
 | 9 | Supabase RLS | 🔴 Major | Must fix before go live — unrestricted DB access via anon key currently. |
@@ -133,8 +134,8 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#8** — Feedback link in Settings. `SettingsScreen.tsx` v3.10.0. 8 Mar.
 - [x] **#10** — Feed History modal redesign + iOS shadow fix. `StatusScreen.tsx` v3.10.3. 8 Mar.
 - [x] **#5** — Reminders toggle persists to Supabase. RLS UPDATE policy added to `user_households`. Verified 10 Mar.
-- [x] **Enhancement** — Global modal header style. `globalStyles.ts` v1.0.0 (new). `SettingsScreen.tsx` v3.13.0. `FeedRemindersModal.tsx` v1.1.0. X right-aligned, title centred. Verified iOS only — Android pending. 11 Mar.
-- [x] **#6** — T&C and Privacy Policy. `LegalModal.tsx` v2.2.0 (new). `react-native-webview` installed. WebView loads live URLs. iOS `onLoadStart` bug fixed. 12 Mar.
+- [x] **Enhancement** — Global modal header style. `globalStyles.ts` v1.0.0 (new). `SettingsScreen.tsx` v3.13.0. `FeedRemindersModal.tsx` v1.1.0. X right-aligned, title centred. Verified iOS + Android ✅. 11–13 Mar.
+- [x] **#6** — T&C and Privacy Policy. `LegalModal.tsx` v2.2.0 (new). `react-native-webview` installed and confirmed working in Expo Go. WebView loads live URLs. iOS `onLoadStart` bug fixed. 12–13 Mar.
 - [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
 - [ ] **#7** — How to section update
 - [ ] **#9** — Supabase RLS
@@ -166,7 +167,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 
 **App:** I Fed The Pet — React Native / Expo mobile app for pet feeding coordination across shared households.
 
-**Stack:** React Native, Expo, TypeScript, Supabase (auth + real-time DB + Edge Functions), AsyncStorage (cache + session tokens only), expo-av (notification sound), @react-native-community/datetimepicker (reminders time picker), react-native-webview (legal document viewer).
+**Stack:** React Native, Expo, TypeScript, Supabase (auth + real-time DB + Edge Functions), AsyncStorage (cache + session tokens only), expo-av (notification sound), @react-native-community/datetimepicker (reminders time picker), react-native-webview (legal document viewer — confirmed working in Expo Go).
 
 **Architecture patterns to know:**
 - Cache-first loading → silent background Supabase refresh
@@ -216,7 +217,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)
 - `types.ts` v1.3.1 (`remindersEnabled` in `NotificationPreferences`; `FeedReminder` updated to Supabase shape — `IsActive`/`DateUpdated` removed, `Title` → `Label`; `'reminder'` added to Notification type union)
 - `database.ts` v4.3.0 — AsyncStorage reminder functions replaced with Supabase; `mapFeedReminder` added; `getFeedRemindersByHouseholdId`, `addFeedReminder`, `deleteFeedReminder` rewritten; `setReceivesReminders` + `getReceivesReminders` added; `FEED_REMINDERS` storage key removed
-- `LegalModal.tsx` v2.2.0 (NEW) — Privacy Policy + Terms of Service pageSheet modal; WebView loads live URLs; no custom loading/error states
+- `LegalModal.tsx` v2.2.0 (NEW) — Privacy Policy + Terms of Service pageSheet modal; WebView loads live URLs; no custom loading/error states; confirmed working in Expo Go
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`

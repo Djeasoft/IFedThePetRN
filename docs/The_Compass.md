@@ -477,7 +477,7 @@
 * **Action**: Updated `FeedRemindersModal.tsx` v1.0.0 → v1.1.0. Removed local `header`, `headerTitle`, `closeButton` styles (13 lines). Added spacer View before title. Imported and applied `modalHeaderStyles`.
 * **Action**: Updated `SettingsScreen.tsx` v3.12.0 → v3.13.0. Removed local `modalHeader`, `modalCloseButton`, `modalTitle` styles (9 lines). Applied `modalHeaderStyles` to all three modal headers (Invite Member, Add Pet, Select Household). Fixed Settings main screen header — JSX reordered from `[X][Settings][spacer]` to `[spacer][Settings][X]`, no stylesheet changes needed.
 * **Architectural Rule**: When two or more screens share structural UI patterns, extract to `globalStyles.ts`. Never duplicate — drift between call sites is the risk.
-* **Verified**: iOS only (11 Mar). Android verification pending.
+* **Verified**: iOS (11 Mar). Android (13 Mar). Fully verified on both platforms.
 * **Files changed**: `src/styles/globalStyles.ts` (new, v1.0.0), `FeedRemindersModal.tsx` (v1.1.0), `SettingsScreen.tsx` (v3.13.0).
 
 ### 12 March 2026
@@ -489,7 +489,7 @@
 * **iOS Bug Found & Fixed**: `onLoadStart` fires multiple times on iOS (once per sub-resource/redirect). Each call was resetting `loading: true`, but `onLoad` only fires once — leaving the spinner permanently visible after the content appeared. Fixed by removing `onLoadStart` and replacing `onLoad` with `onLoadEnd`. Android was unaffected.
 * **Final simplification**: Custom loading spinner and error state removed entirely. The native WebView handles its own loading presentation on both platforms. Component reduced to modal shell + header + `WebView` only.
 * **File versions**: `LegalModal.tsx` v2.2.0 (new file, iterated v1.0.0 → v2.2.0 in session). `SettingsScreen.tsx` unchanged at v3.13.0.
-* **Pattern note**: `react-native-webview` requires a native build — will not render in Expo Go. Same constraint as native push notifications (#2). WebView-based screens must be tested via EAS Build / `expo run:ios` / `expo run:android`.
+* **Pattern note**: `react-native-webview` confirmed working in Expo Go on iOS and Android — no native build required. Verified by Jarques, 13 March 2026.
 
 ---
 
