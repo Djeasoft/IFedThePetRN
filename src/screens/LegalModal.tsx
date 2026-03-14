@@ -3,6 +3,7 @@
 // Version: 2.0.0 - Content loaded from live URLs via react-native-webview. Replaces v1.0.0 hardcoded text sections.
 // Version: 2.1.0 - Fix iOS spinner stuck: remove onLoadStart (fires multiple times on iOS), replace onLoad with onLoadEnd.
 // Version: 2.2.0 - Remove custom loading + error states. WebView renders natively with no overlays.
+// Version: 2.3.0 - Header: left-aligned to match globalStyles v1.2.0. Remove spacer View.
 //
 // URLs:
 //   Privacy Policy   → https://ifedthepet.app/privacy-policy.html
@@ -62,7 +63,6 @@ export function LegalModal({ visible, onClose, type }: LegalModalProps) {
 
         {/* ── Header ── */}
         <View style={[modalHeaderStyles.modalHeader, styles.headerExtras, { borderBottomColor: theme.border }]}>
-          <View style={modalHeaderStyles.modalHeaderSpacer} />
           <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>{TITLES[type]}</Text>
           <TouchableOpacity onPress={onClose} style={modalHeaderStyles.modalCloseButton}>
             <Ionicons name="close" size={24} color={theme.text} />

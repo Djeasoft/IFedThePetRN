@@ -23,6 +23,7 @@
 // Version: 3.10.8 - UI: reduce contentContainer paddingHorizontal 24→16; remove maxWidth 320 cap from statusCard, petCheckboxContainer, historySection, upgradeSection; tighten statusCard shadow (radius 8→4, opacity 0.1→0.08, offset height 2→1, elevation 4→2)
 // Version: 3.10.9 - UI: tighten household name spacing — header marginBottom 8→4, householdName marginBottom 32→5
 // Version: 3.10.10 - UI: manual tweaks (statusCard marginBottom 32→22, timeText fontSize 48→58, petNamesText marginTop removed) + statusLabel gap reduction (statusCard padding split: paddingTop 32→16, statusLabel marginBottom 16→8)
+// Version: 3.10.11 - HistoryModal header: adopt globalStyles modalHeaderStyles + theme tokens. Remove raw-value local styles.
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -62,6 +63,8 @@ import {
 import { Pet, FeedingEvent, User, Household, UNDO_WINDOW_MS } from '../lib/types';
 import { formatTime, getTimeAgo, formatDateHeader } from '../lib/time';
 import { useTheme } from '../contexts/ThemeContext';
+import { spacing } from '../styles/theme';
+import { modalHeaderStyles } from '../styles/globalStyles';
 import { Audio } from 'expo-av';
 
 interface StyledStatusScreenProps {
@@ -928,14 +931,14 @@ export function StyledStatusScreen({
         >
           <View style={[styles.modalContainer, { backgroundColor: theme.background, paddingTop: insets.top }]}>
             {/* Modal Header */}
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View style={[modalHeaderStyles.modalHeader, styles.historyModalHeader, { borderBottomColor: theme.border }]}>
               <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Feed History</Text>
+                <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>Feed History</Text>
                 <Text style={[styles.modalSubtitle, { color: theme.textTertiary }]}>Last 30 days</Text>
               </View>
               <TouchableOpacity
                 onPress={() => setShowHistoryModal(false)}
-                style={styles.modalCloseButton}
+                style={modalHeaderStyles.modalCloseButton}
               >
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
@@ -1306,20 +1309,10 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  historyModalHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.base,
     borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  modalCloseButton: {
-    padding: 4,
   },
   modalScrollView: {
     flex: 1,

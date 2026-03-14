@@ -24,6 +24,7 @@
 // Version: 3.14.0 - Priority #6: Legal rows now open in-app LegalModal (Privacy Policy + Terms of Service)
 //                   instead of external browser links
 // Version: 3.15.0 - Item #14: Remove "Feed reminders" toggle from Notifications card; pass isAdmin to FeedRemindersModal
+// Version: 3.16.0 - Header consistency: left-align all headers (main + 3 modals). Remove spacer Views. Match globalStyles v1.2.0.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FeedRemindersModal } from './FeedRemindersModal';
@@ -785,7 +786,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.border }]}>
-          <View style={styles.headerSpacer} />
           <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
           <TouchableOpacity onPress={onClose} style={modalHeaderStyles.modalCloseButton}>
             <Ionicons name="close" size={24} color={theme.text} />
@@ -1658,7 +1658,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header with X close button */}
               <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
-                <View style={modalHeaderStyles.modalHeaderSpacer} />
                 <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>
                   Invite Member
                 </Text>
@@ -1752,7 +1751,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header with X close button */}
               <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
-                <View style={modalHeaderStyles.modalHeaderSpacer} />
                 <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>Add Pet</Text>
                 <TouchableOpacity
                   onPress={() => {
@@ -1830,7 +1828,6 @@ export function SettingsScreen({ visible, onClose, onResetOnboarding, onHousehol
             <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
               {/* Modal Header */}
               <View style={[modalHeaderStyles.modalHeader, styles.modalHeaderSpacing]}>
-                <View style={modalHeaderStyles.modalHeaderSpacer} />
                 <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>
                   Select Household
                 </Text>
@@ -1912,6 +1909,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
@@ -1920,13 +1918,8 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
   },
   headerTitle: {
-    flex: 1,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-  },
-  headerSpacer: {
-    width: 40,
   },
   scrollView: {
     flex: 1,

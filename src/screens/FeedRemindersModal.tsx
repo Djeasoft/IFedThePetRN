@@ -1,5 +1,6 @@
 // FeedRemindersModal.tsx
 // Version: 2.1.0 - Switch swapped from native react-native to custom themed Switch (via globalStyles).
+// Version: 2.2.0 - Header: left-aligned to match globalStyles v1.2.0. Remove spacer View.
 //
 // Flows supported:
 //   Flow 1 — Admin, empty state → "Create your first reminder" → form → time picker → saved list
@@ -191,7 +192,6 @@ export function FeedRemindersModal({ visible, onClose, householdId, isAdmin }: F
 
         {/* ── Header ── */}
         <View style={[modalHeaderStyles.modalHeader, styles.headerExtras, { borderBottomColor: theme.border }]}>
-          <View style={modalHeaderStyles.modalHeaderSpacer} />
           <Text style={[modalHeaderStyles.modalTitle, { color: theme.text }]}>Feed Reminders</Text>
           <TouchableOpacity onPress={onClose} style={modalHeaderStyles.modalCloseButton}>
             <Ionicons name="close" size={24} color={theme.text} />
