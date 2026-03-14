@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Friday, 13 March 2026
+**Last Updated:** Saturday, 14 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. StatusCard UI polish complete (v3.10.8). #14 Feed Reminders redesign fully complete and verified. #6 T&C fully complete and verified on Expo Go (iOS + Android).
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. All headers now left-aligned across StatusScreen, SettingsScreen, FeedRemindersModal, LegalModal (v3.10.11, v3.16.0, v2.2.0, v2.3.0). StatusScreen UI polish complete through v3.10.11. globalStyles v1.2.0 (left-aligned shared header pattern).
 
 ---
 
@@ -74,6 +74,10 @@ What is verified and working:
 - Feed Reminders redesign (#14) — admin-only create/delete/toggle. Per-reminder `enabled` toggle (household-wide mute). Non-admins see read-only view. `reminders.enabled` column in Supabase. RLS UPDATE policy (admin only). `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar ✅
 - Custom animated Switch in `FeedRemindersModal` — matches Settings screen toggles. `globalStyles.ts` v1.1.0 (re-exports `Switch` from `src/components/Switch.tsx`). Verified 13 Mar ✅
 - StatusCard UI polish — `contentContainer` paddingHorizontal reduced 24→16; `maxWidth: 320` cap removed from `statusCard`, `petCheckboxContainer`, `historySection`, `upgradeSection`; `statusCard` + `petCheckboxContainer` shadow tightened (radius 8→4, opacity 0.1→0.08, elevation 4→2). `StatusScreen.tsx` v3.10.8 ✅ *(13 Mar)*
+- Household name spacing tightened — `header.marginBottom` 8→4; `householdName.marginBottom` 32→5. `StatusScreen.tsx` v3.10.9 ✅ *(14 Mar)*
+- StatusScreen UI polish (manual tweaks batch) — `statusCard`: `marginBottom` 32→22, `paddingBottom` 32→22, `paddingTop` split from uniform `padding: 32`; `statusLabel.marginBottom` 16→4; `timeText.fontSize` 48→58; `petNamesText.marginTop` removed; `fedByText`: `marginTop: 5`, `marginBottom: 0`; `petCheckboxContainer`: `marginBottom` 32→22, padding tuned; `checkboxRow.paddingVertical` 8→1; `checkboxRowInline.marginRight` 16→10; `checkbox.marginRight` 12→6; `feedButtonContainer.marginBottom` 32→12. `StatusScreen.tsx` v3.10.10 ✅ *(14 Mar)*
+- HistoryModal header adopted `globalStyles` tokens — replaced raw-value local styles (`modalHeader`, `modalTitle`, `modalCloseButton`) with `modalHeaderStyles` + new `historyModalHeader` local style for padding/border. Added imports for `spacing` + `modalHeaderStyles`. `StatusScreen.tsx` v3.10.11 ✅ *(14 Mar)*
+- Header consistency across all screens — all modal/sheet headers left-aligned (title left, X right, `justifyContent: 'space-between'`), matching `NotificationsPanel` reference pattern. `globalStyles.ts` v1.2.0: removed `modalHeaderSpacer`, removed `flex:1`/`textAlign:'center'` from `modalTitle`, added `justifyContent:'space-between'` to `modalHeader`. Spacer `View` removed from: `FeedRemindersModal` (v2.2.0), `LegalModal` (v2.3.0), `SettingsScreen` main header + Invite Member + Add Pet + Select Household modals (v3.16.0). Local `headerSpacer` style and `headerSpacer`/`headerTitle` centering props removed from `SettingsScreen`. ✅ *(14 Mar)*
 
 What is **not** working:
 - Invite email link leads to blank page (deep linking not yet implemented — expected) ❌
@@ -159,6 +163,10 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **#14** — Feed Reminders redesign: admin-only write, per-reminder enabled toggle (household-wide mute), `receives_reminders` removed from Settings. `FeedRemindersModal.tsx` v2.1.0, `SettingsScreen.tsx` v3.15.0, `database.ts` v4.4.0, `types.ts` v1.4.0, `process-reminders` v1.1.0. Verified 13 Mar.
 - [x] **Enhancement** — Custom animated Switch in `FeedRemindersModal`. `globalStyles.ts` v1.1.0 (re-exports Switch). Verified 13 Mar.
 - [x] **UI Polish** — StatusCard side padding reduced, `maxWidth` cap removed from all StatusScreen cards, shadow tightened on `statusCard` + `petCheckboxContainer`. `StatusScreen.tsx` v3.10.8. 13 Mar.
+- [x] **UI Polish** — Household name spacing tightened. `header.marginBottom` 8→4, `householdName.marginBottom` 32→5. `StatusScreen.tsx` v3.10.9. 14 Mar.
+- [x] **UI Polish** — StatusScreen card + button spacing batch (v3.10.10). statusCard padding split + reduced, statusLabel gap tightened, timeText enlarged, petCheckboxContainer tuned, feedButtonContainer margin reduced. 14 Mar.
+- [x] **UI Polish** — HistoryModal header tokens (v3.10.11). Raw values replaced with `modalHeaderStyles` + `spacing` theme tokens. 14 Mar.
+- [x] **UI Polish** — Header consistency across all screens (globalStyles v1.2.0, SettingsScreen v3.16.0, FeedRemindersModal v2.2.0, LegalModal v2.3.0). All modal/sheet headers left-aligned. `modalHeaderSpacer` removed. 14 Mar.
 - [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
 - [ ] **#7** — How to section update
 - [ ] **#9** — Supabase RLS
@@ -233,16 +241,16 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 
 **Current file versions:**
 - `App.tsx` v3.10.0
-- `StatusScreen.tsx` v3.10.8 (UI polish — reduced side padding, removed maxWidth cap on all cards, tighter shadow on statusCard + petCheckboxContainer)
-- `SettingsScreen.tsx` v3.15.0 (receives_reminders toggle removed from Notifications card; isAdmin passed to FeedRemindersModal)
-- `FeedRemindersModal.tsx` v2.1.0 (admin-only write; per-reminder enabled toggle; custom animated Switch)
-- `globalStyles.ts` v1.1.0 (shared `modalHeaderStyles`; re-exports `Switch` from `src/components/Switch.tsx`)
-- `NotificationsPanel.tsx` v2.3.0
+- `StatusScreen.tsx` v3.10.11 (HistoryModal header uses globalStyles tokens; UI polish batch v3.10.10; household name spacing v3.10.9)
+- `SettingsScreen.tsx` v3.16.0 (all headers left-aligned; spacer Views removed from main header + 3 dialog modals)
+- `FeedRemindersModal.tsx` v2.2.0 (header left-aligned; spacer View removed)
+- `LegalModal.tsx` v2.3.0 (header left-aligned; spacer View removed)
+- `globalStyles.ts` v1.2.0 (left-aligned `modalHeaderStyles`: `justifyContent:'space-between'`, no spacer, no `textAlign:'center'`; re-exports `Switch`)
+- `NotificationsPanel.tsx` v2.3.0 (reference pattern for left-aligned header — no changes needed)
 - `AuthScreen.tsx` v1.2.0
 - `OnboardingFlow.tsx` v5.1.0 (mount-time invited user guard, step reorder)
 - `types.ts` v1.4.0 (`FeedReminder.Enabled` added; `remindersEnabled` removed from `NotificationPreferences`; `'reminder'` in Notification type union)
 - `database.ts` v4.4.0 — `setReminderEnabled` added; `setReceivesReminders` and `getReceivesReminders` removed; `mapFeedReminder` maps `enabled` field
-- `LegalModal.tsx` v2.2.0 (NEW) — Privacy Policy + Terms of Service pageSheet modal; WebView loads live URLs; no custom loading/error states; confirmed working in Expo Go
 
 **Supabase:**
 - Project ID: `dswbgtbrorhxxnargbdw`

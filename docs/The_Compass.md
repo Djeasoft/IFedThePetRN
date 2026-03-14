@@ -524,6 +524,72 @@
 
 ---
 
+### 14 March 2026
+
+**Milestone: Household name spacing tightened on StatusScreen**
+* **Context**: The household name subtitle below the logo header had too much space above and below it — particularly the 32px bottom margin before the status card. Tightened as a standalone UI polish session.
+* **Changes:**
+  - `header.marginBottom`: 8 → 4 — reduces the gap between the logo row and the household name subtitle.
+  - `householdName.marginBottom`: 32 → 5 — closes the gap between the household name subtitle and the status card.
+* **Safe area note**: No interaction with iOS/Android safe area insets. `paddingTop: insets.top` is applied on the outer container `View`, not the scroll content — these margin changes are fully unaffected.
+* **Files changed**: `StatusScreen.tsx` v3.10.8 → v3.10.9.
+
+---
+
+**Milestone: StatusScreen UI polish batch — card spacing, label gap, font sizes (v3.10.10)**
+* **Context**: Continuation of UI polish on 14 March 2026. Multiple manual style tweaks accumulated since v3.10.9, applied together as v3.10.10. Primary goal: tighten the gap above and below the "LAST FED" status label inside the status card. Secondary: tune font sizes, checkbox spacing, and button margins for a more compact layout.
+* **Changes:**
+  - `statusCard`: `padding: 32` split into `paddingTop: 16`, `paddingHorizontal: 32`, `paddingBottom: 22`. Reduces space above "LAST FED" label. `marginBottom`: 32 → 22.
+  - `statusLabel.marginBottom`: 16 → 4 — tightens gap between "LAST FED" and the time display.
+  - `timeText.fontSize`: 48 → 58 — larger time text.
+  - `petNamesText.marginTop`: 8 → removed.
+  - `fedByText`: `marginTop: 5`, `marginBottom: 0` added explicitly.
+  - `petCheckboxContainer`: padding tuned (`paddingTop: 16`, `paddingLeft/Right: 20`, `paddingBottom: 16`); `marginBottom`: 32 → 22.
+  - `checkboxRow.paddingVertical`: 8 → 1.
+  - `checkboxRowInline.marginRight`: 16 → 10.
+  - `checkbox.marginRight`: 12 → 6.
+  - `feedButtonContainer.marginBottom`: 32 → 12.
+* **Files changed**: `StatusScreen.tsx` v3.10.9 → v3.10.10.
+
+---
+
+**Milestone: HistoryModal header adopts globalStyles tokens (v3.10.11)**
+* **Context**: The Feed History modal header was already left-aligned but used raw pixel values (`fontSize: 18`, `fontWeight: '600'`, `padding: 4`, `paddingHorizontal: 20`, `paddingVertical: 16`). Migrated to theme tokens and shared `modalHeaderStyles` for consistency with the new header standard.
+* **Changes:**
+  - Added imports: `spacing` from `'../styles/theme'`; `modalHeaderStyles` from `'../styles/globalStyles'`.
+  - JSX: `styles.modalHeader` → `[modalHeaderStyles.modalHeader, styles.historyModalHeader]`. `styles.modalTitle` → `modalHeaderStyles.modalTitle`. `styles.modalCloseButton` → `modalHeaderStyles.modalCloseButton`.
+  - Added `historyModalHeader` local style: `paddingHorizontal: spacing.lg` (20), `paddingVertical: spacing.base` (16), `borderBottomWidth: 1` — preserves identical visual output via tokens.
+  - Removed now-unused local styles: `modalHeader`, `modalTitle`, `modalCloseButton`. Kept `modalSubtitle` (unique to this modal — "Last 30 days").
+* **Files changed**: `StatusScreen.tsx` v3.10.10 → v3.10.11.
+
+---
+
+**Milestone: Header consistency — all modal/sheet headers left-aligned**
+* **Context**: Headers across modals and sheets had been centered (3-column spacer layout) from an earlier design direction. On 14 March 2026, the design direction changed to left-aligned headers throughout — matching the existing pattern already in `NotificationsPanel.tsx`. `globalStyles.ts` was updated first so all consumers automatically benefited with minimal JSX changes.
+* **Reference pattern (NotificationsPanel — unchanged):** `[Title flex:1 left] [X button]` with `justifyContent: 'space-between'` on the row. No spacer View.
+* **Gap analysis before change:**
+
+  | Location | Was | Action taken |
+  |---|---|---|
+  | NotificationsPanel header | LEFT ✅ | None — reference |
+  | FeedRemindersModal header | CENTER ❌ | Removed spacer View |
+  | LegalModal header | CENTER ❌ | Removed spacer View |
+  | StatusScreen HistoryModal | LEFT ✅ (raw values) | Adopted globalStyles tokens (v3.10.11) |
+  | SettingsScreen — main header | CENTER ❌ | Removed spacer View; updated local styles |
+  | SettingsScreen — Invite Member modal | CENTER ❌ | Removed spacer View |
+  | SettingsScreen — Add Pet modal | CENTER ❌ | Removed spacer View |
+  | SettingsScreen — Select Household modal | CENTER ❌ | Removed spacer View |
+
+* **Changes:**
+  - `globalStyles.ts` v1.2.0: `modalHeader` — added `justifyContent: 'space-between'`. `modalTitle` — removed `flex: 1` and `textAlign: 'center'`. Deleted `modalHeaderSpacer` entirely. Comment updated to reflect new two-column layout.
+  - `FeedRemindersModal.tsx` v2.2.0: removed `<View style={modalHeaderStyles.modalHeaderSpacer} />` from header JSX.
+  - `LegalModal.tsx` v2.3.0: same spacer View removal.
+  - `SettingsScreen.tsx` v3.16.0: main Settings header — removed `<View style={styles.headerSpacer} />`, added `justifyContent: 'space-between'` to `header` style, removed `flex: 1` and `textAlign: 'center'` from `headerTitle`, deleted `headerSpacer` style. Three dialog modals (Invite Member, Add Pet, Select Household) — removed `<View style={modalHeaderStyles.modalHeaderSpacer} />` from each.
+* **Design rule established**: All modal and sheet headers in the app use a two-column `[title] [X]` layout with `justifyContent: 'space-between'`. The `modalHeaderSpacer` pattern is retired. `NotificationsPanel.tsx` is the canonical reference.
+* **Files changed**: `globalStyles.ts` v1.1.0 → v1.2.0, `FeedRemindersModal.tsx` v2.1.0 → v2.2.0, `LegalModal.tsx` v2.2.0 → v2.3.0, `SettingsScreen.tsx` v3.15.0 → v3.16.0.
+
+---
+
 ### Categorized Debt & Ghost Logic
 
 **1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**
