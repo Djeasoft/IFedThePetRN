@@ -21,6 +21,8 @@
 // Version: 3.10.7 - Fix: replace counter-based suppression with timestamp window (suppressUntilRef) — eliminates broadcast-count dependency, no timer infrastructure needed, cross-device updates always pass through after 3s window
 // Version: 3.10.6 - Fix: remove premature finally counter reset (broadcasts arrive after finally on high-latency networks); add 5s safety timeout instead. Fix non-unique Supabase channel names in database.ts (status:pets/feeding_events scoped by householdId)
 // Version: 3.10.8 - UI: reduce contentContainer paddingHorizontal 24→16; remove maxWidth 320 cap from statusCard, petCheckboxContainer, historySection, upgradeSection; tighten statusCard shadow (radius 8→4, opacity 0.1→0.08, offset height 2→1, elevation 4→2)
+// Version: 3.10.9 - UI: tighten household name spacing — header marginBottom 8→4, householdName marginBottom 32→5
+// Version: 3.10.10 - UI: manual tweaks (statusCard marginBottom 32→22, timeText fontSize 48→58, petNamesText marginTop removed) + statusLabel gap reduction (statusCard padding split: paddingTop 32→16, statusLabel marginBottom 16→8)
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -1014,7 +1016,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
     paddingHorizontal: 4,
   },
   menuButton: {
@@ -1051,19 +1053,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-
   // Household Name
   householdName: {
     fontSize: 14,
-    marginBottom: 32,
+    marginBottom: 5,
   },
-
   // Status Card
   statusCard: {
     borderRadius: 16,
-    padding: 32,
+    paddingTop: 16,
+    paddingHorizontal: 32,
+    paddingBottom: 22,
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -1075,13 +1077,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     letterSpacing: 2,
-    marginBottom: 16,
+    marginBottom: 4,
   },
   timeDisplay: {
     marginBottom: 8,
   },
   timeText: {
-    fontSize: 48,
+    fontSize: 58,
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -1089,12 +1091,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     textAlign: 'center',
-    marginTop: 8,
   },
   fedByText: {
     fontSize: 14,
     textAlign: 'center',
-    marginTop: 4,
+    marginTop: 5,
+    marginBottom: 0,
   },
   timeAgo: {
     fontSize: 14,
@@ -1105,8 +1107,11 @@ const styles = StyleSheet.create({
   // Pet Checkboxes
   petCheckboxContainer: {
     borderRadius: 16,
-    padding: 16,
-    marginBottom: 32,
+    paddingTop: 16,
+    paddingLeft: 20,
+    paddingRight: 20,
+    paddingBottom: 16,
+    marginBottom: 22,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -1118,7 +1123,7 @@ const styles = StyleSheet.create({
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 1,
   },
   // FIX v3.8.0: Horizontal wrapping row for individual pet checkboxes
   petCheckboxRow: {
@@ -1132,7 +1137,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    marginRight: 16,
+    marginRight: 10,
   },
   checkbox: {
     width: 20,
@@ -1141,7 +1146,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 6,
   },
   checkboxLabel: {
     fontSize: 16,
@@ -1151,7 +1156,7 @@ const styles = StyleSheet.create({
   // Feed Button
   feedButtonContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 12,
   },
   feedButton: {
     width: 192,
