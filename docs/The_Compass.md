@@ -590,11 +590,43 @@
 
 ---
 
+### 15 March 2026
+
+**Milestone: App Store Priority #9 — Supabase RLS Enabled Across All Tables (D1 + D15 Resolved)**
+* **Context**: All 8 Supabase tables had RLS disabled (D1), leaving unrestricted read/write access via the anon key. The `reminders` table had RLS enabled but its INSERT and DELETE policies incorrectly allowed any household member rather than admin-only (D15). This milestone closes both debt items.
+* **Deliverables created**: `docs/RLS_Migration.sql` — step-by-step SQL ready to paste into the Supabase SQL Editor. `DatabaseSchema.sql` bumped to v1.3.0 with per-table RLS comments.
+* **Architecture Decision — SECURITY DEFINER helper functions**: Two shared PostgreSQL functions were created before any policies:
+  - `my_user_id()` — returns `users.id` for the current `auth.uid()` session.
+  - `is_household_member(p_household_id uuid)` — returns `true` if the current user is a member of the given household.
+  - Both are `SECURITY DEFINER` and `STABLE`. This is essential: policies on `users` and `user_households` would otherwise create infinite recursion if they referenced each other via plain subqueries. `SECURITY DEFINER` makes the function execute as the DB owner, bypassing RLS on its internal `users`/`user_households` reads during execution.
+* **Two deliberate short-term trade-offs (TODOs in schema)**:
+  1. `users` SELECT uses `USING (true)` for authenticated users. Required because `getUserByEmail()` is called during onboarding to find pending-invite users whose `auth_user_id = null` (set before signup) — this row cannot be matched via `auth_user_id = auth.uid()`. Future fix: move `getUserByEmail` to a service-role Edge Function.
+  2. `households` SELECT uses `USING (true)` for authenticated users. Required because `getHouseholdByInvitationCode()` is called by a user not yet a household member (during the join flow). Future fix: move to a service-role Edge Function and tighten to `is_household_member(id)`.
+* **Policy summary per table**:
+  - `feeding_events`: SELECT/INSERT/DELETE — household member (`is_household_member`). No UPDATE.
+  - `households`: SELECT — all authenticated (short-term). INSERT — `main_member_id = my_user_id()`. UPDATE — household member.
+  - `notification_reads`: SELECT/INSERT/UPDATE/DELETE — own rows only (`user_id = my_user_id()`).
+  - `notifications`: SELECT — household member AND (`target_user_id IS NULL` OR `= my_user_id()` OR `sender_user_id = my_user_id()`). INSERT/DELETE — household member. Visibility filter previously enforced only in app code now also enforced at DB level.
+  - `pets`: SELECT/INSERT/UPDATE/DELETE — household member.
+  - `reminders`: SELECT — household member. INSERT/UPDATE/DELETE — admin only (`households.main_member_id = my_user_id()`). Fixes D15.
+  - `user_households`: SELECT — own row OR `is_household_member(household_id)`. INSERT — own row. UPDATE — own row. DELETE — self-removal OR admin removes member.
+  - `users`: SELECT — all authenticated (short-term). INSERT — `auth_user_id = auth.uid()`. UPDATE — own row only.
+* **Incident — Out-of-order execution caused access lockout**: Policies were run before the helper functions existed. `CREATE POLICY` succeeded (the functions did exist from a prior session attempt) but the legacy policies on tables already had RLS enabled. When `user_households` RLS was enabled, the old policies that contained raw `JOIN user_households` subqueries (e.g. "Allow members to read feeding events") triggered the new `user_households_select` policy — which itself contained a subquery on `user_households` — causing infinite recursion. Supabase threw an error on any table whose legacy policy joined through `user_households`, locking out `feeding_events` reads entirely.
+* **Fix**: Recovery script dropped all legacy policies (named "Allow...", "Enable...", "Members can..."). The self-referential `user_households_select` policy was replaced: the original version used a raw subquery `household_id IN (SELECT uh.household_id FROM user_households uh WHERE uh.user_id = my_user_id())` — this queries `user_households` from within a `user_households` policy = infinite recursion. Replaced with `is_household_member(household_id)` which is `SECURITY DEFINER` and bypasses RLS internally — no recursion.
+* **Architectural Rule — RLS self-reference**: A policy on table T must never contain a plain subquery that reads table T. This causes infinite recursion in Postgres RLS. Always use a `SECURITY DEFINER` helper function for any cross-table lookup inside a policy, especially for `user_households` which is referenced by policies on many other tables.
+* **Architectural Rule — RLS execution order**: Always run helper functions (`SECURITY DEFINER`) before enabling RLS or creating policies on any table. Policies that reference non-existent functions will fail to evaluate and lock out all access on that table.
+* **Debt resolved**: D1 (unrestricted anon access), D15 (reminders INSERT/DELETE not admin-only).
+* **Files changed**: `docs/RLS_Migration.sql` (new), `docs/DatabaseSchema.sql` v1.3.0. No app code changes.
+* **Verified**: App fully operational post-recovery. Feeding events visible, feed button working, reminders admin-gated. Jarques, 15 March 2026.
+
+---
+
 ### Categorized Debt & Ghost Logic
 
-**1. Row Level Security (RLS) Silent Failure Vulnerabilities (Critical Security Debt)**
-* **The Issue**: RLS policies were initially disabled to unblock development. During this time, a footgun was discovered where omitting `.select().single()` on an `.update()` call masked silent update failures if the target table lacked an explicit `UPDATE` RLS policy. 
-* **The Risk**: Anyone with the anon key currently has unrestricted read/write access. Once `auth.uid()` checks are re-enabled, developers must strictly adhere to the `.update().eq().select().single()` pattern to actively catch and handle RLS-driven write rejections rather than silently failing and leaving the UI out of sync with the database.
+**1. Row Level Security (RLS) — RESOLVED 15 March 2026**
+* **The Issue**: RLS policies were initially disabled to unblock development. During this time, a footgun was discovered where omitting `.select().single()` on an `.update()` call masked silent update failures if the target table lacked an explicit `UPDATE` RLS policy.
+* **Resolution**: RLS enabled on all 8 tables (D1 resolved). Helper functions `my_user_id()` + `is_household_member()` (SECURITY DEFINER) prevent recursion. Legacy policies cleaned up. See 15 March 2026 milestone entry for full detail.
+* **Ongoing rule**: Developers must strictly adhere to the `.update().eq().select().single()` pattern to actively catch and handle RLS-driven write rejections rather than silently failing and leaving the UI out of sync with the database. Silent 0-row updates with no error are the signature of a missing UPDATE RLS policy.
 
 **2. Asymmetric Update Patterns: Optimistic vs. Pessimistic (Architectural Rule)**
 * **The Decision**: The feeding flow (`StatusScreen`) utilizes a purely Optimistic Update pattern to ensure 0ms latency. In contrast, sensitive tier-gating functions like the Pro Toggle (`SettingsScreen`) utilize a Pessimistic pattern, awaiting database confirmation before altering the UI.

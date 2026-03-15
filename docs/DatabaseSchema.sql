@@ -4,10 +4,12 @@
 -- Version: 1.1.0 - reminders table added; user_households.receives_reminders added; RLS enabled on reminders (10 Mar 2026)
 -- Version: 1.2.0 - RLS policies applied to reminders table: INSERT, SELECT, UPDATE, DELETE (10 Mar 2026)
 -- Version: 1.2.1 - notifications.target_user_id comment updated: also used for reminder type (10 Mar 2026)
+-- Version: 1.3.0 - RLS enabled on all tables (D1 resolved). reminders policies fixed admin-only INSERT/DELETE/UPDATE (D15 resolved). Helper functions: my_user_id(), is_household_member(). (15 Mar 2026)
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+-- For the full RLS migration SQL, see docs/RLS_Migration.sql.
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. Policies: SELECT/INSERT/DELETE household member (is_household_member). No UPDATE.
 CREATE TABLE public.feeding_events (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid,
@@ -22,7 +24,8 @@ CREATE TABLE public.feeding_events (
   CONSTRAINT feeding_events_fed_by_user_id_fkey FOREIGN KEY (fed_by_user_id) REFERENCES public.users(id)
 );
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. Policies: SELECT authenticated (true — short-term, allows invite code join); INSERT main_member_id = my_user_id(); UPDATE is_household_member.
+-- TODO: tighten SELECT to is_household_member once getHouseholdByInvitationCode moves to Edge Function.
 CREATE TABLE public.households (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_name text NOT NULL,
@@ -34,7 +37,7 @@ CREATE TABLE public.households (
   CONSTRAINT households_main_member_id_fkey FOREIGN KEY (main_member_id) REFERENCES public.users(id)
 );
 
--- RLS: status unverified — confirm in Supabase Dashboard
+-- RLS: enabled. Policies: SELECT/INSERT/UPDATE/DELETE own rows only (user_id = my_user_id()).
 CREATE TABLE public.notification_reads (
   notification_id uuid NOT NULL,
   user_id uuid NOT NULL,
@@ -44,7 +47,7 @@ CREATE TABLE public.notification_reads (
   CONSTRAINT notification_reads_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
 );
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. SELECT: household member AND (target_user_id IS NULL OR = me OR sender_user_id = me). INSERT/DELETE: household member.
 CREATE TABLE public.notifications (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid,
@@ -60,7 +63,7 @@ CREATE TABLE public.notifications (
   CONSTRAINT notifications_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id)
 );
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. Policies: SELECT/INSERT/UPDATE/DELETE household member (is_household_member).
 CREATE TABLE public.pets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   pet_name text NOT NULL,
@@ -74,10 +77,7 @@ CREATE TABLE public.pets (
   CONSTRAINT pets_last_fed_by_id_fkey FOREIGN KEY (last_fed_by_id) REFERENCES public.users(id)
 );
 
--- RLS: enabled. Policies: INSERT, SELECT, UPDATE, DELETE (household membership check).
--- Policy pattern: EXISTS (SELECT 1 FROM user_households
---   WHERE household_id = reminders.household_id
---   AND user_id = (SELECT id FROM users WHERE auth_user_id = auth.uid()))
+-- RLS: enabled. SELECT: household member. INSERT/UPDATE/DELETE: admin only (households.main_member_id = my_user_id()). D15 fixed 15 Mar.
 CREATE TABLE public.reminders (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   household_id uuid NOT NULL,
@@ -88,7 +88,7 @@ CREATE TABLE public.reminders (
   CONSTRAINT reminders_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id)
 );
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. SELECT: own row OR same household. INSERT: own row (user_id = my_user_id()). UPDATE: own row. DELETE: self-removal OR admin removes member.
 CREATE TABLE public.user_households (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid,
@@ -100,7 +100,8 @@ CREATE TABLE public.user_households (
   CONSTRAINT user_households_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id)
 );
 
--- RLS: disabled (D1 — unrestricted anon access, fix before launch)
+-- RLS: enabled. SELECT: authenticated (true — short-term, allows getUserByEmail for pending-invite lookup). INSERT: auth_user_id = auth.uid(). UPDATE: own row only.
+-- TODO: tighten SELECT to own row + co-member check once getUserByEmail moves to Edge Function.
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   member_name text NOT NULL,
@@ -115,3 +116,22 @@ CREATE TABLE public.users (
   CONSTRAINT users_pkey PRIMARY KEY (id),
   CONSTRAINT users_auth_user_id_fkey FOREIGN KEY (auth_user_id) REFERENCES auth.users(id)
 );
+
+-- Policy on Reminders: Admin can update reminders
+alter policy "Admin can update reminders"
+on "public"."reminders"
+to public
+using (
+    (EXISTS ( SELECT 1
+   FROM (user_households uh
+     JOIN users u ON ((u.id = uh.user_id)))
+  WHERE ((uh.household_id = reminders.household_id) AND (u.auth_user_id = auth.uid()) AND (u.is_main_member = true))))
+
+  ) with check (
+
+      (EXISTS ( SELECT 1
+   FROM (user_households uh
+     JOIN users u ON ((u.id = uh.user_id)))
+  WHERE ((uh.household_id = reminders.household_id) AND (u.auth_user_id = auth.uid()) AND (u.is_main_member = true))))
+
+  );

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(find /c/ReposMy/IFedThePet/IFedThePetRN/supabase -type f -name *.sql -o -name *.ts -o -name *.md)",
+      "Bash(sed 's/export //')",
+      "Bash(sed 's/async //')",
+      "Bash(sed 's/function //')",
+      "Bash(sed 's/\\(.*$//')"
     ]
   }
 }

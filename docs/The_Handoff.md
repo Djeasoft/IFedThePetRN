@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
-**Last Updated:** Saturday, 14 March 2026
+**Last Updated:** Sunday, 15 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. All headers now left-aligned across StatusScreen, SettingsScreen, FeedRemindersModal, LegalModal (v3.10.11, v3.16.0, v2.2.0, v2.3.0). StatusScreen UI polish complete through v3.10.11. globalStyles v1.2.0 (left-aligned shared header pattern).
+**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. #9 Supabase RLS complete (D1 + D15 resolved, 15 Mar). All headers now left-aligned across StatusScreen, SettingsScreen, FeedRemindersModal, LegalModal (v3.10.11, v3.16.0, v2.2.0, v2.3.0). StatusScreen UI polish complete through v3.10.11. globalStyles v1.2.0 (left-aligned shared header pattern).
 
 ---
 
@@ -114,7 +114,7 @@ What is **not** working:
 | 6 | ~~T&C~~ | ✅ Done | `LegalModal.tsx` v2.2.0 (NEW). `react-native-webview` installed. Privacy Policy + Terms of Service load from live URLs in a pageSheet modal. iOS `onLoadStart` multi-fire bug fixed. `react-native-webview` confirmed working in Expo Go — no native build required. Verified iOS + Android, 12–13 Mar. |
 | 7 | How to section | 🔴 Major | Needs to be updated. |
 | 8 | ~~Support on Settings~~ | ✅ Done | "Give your feedback" tappable mailto link. `SettingsScreen.tsx` v3.10.0. |
-| 9 | Supabase RLS | 🔴 Major | Must fix before go live — unrestricted DB access via anon key currently. |
+| 9 | ~~Supabase RLS~~ | ✅ Done | RLS enabled on all 8 tables. Helper functions `my_user_id()` + `is_household_member()` (SECURITY DEFINER). Legacy policies cleaned up. `user_households_select` fixed (was self-referential → recursion). `DatabaseSchema.sql` v1.3.0. `docs/RLS_Migration.sql` created. D1 + D15 resolved. Verified 15 Mar. Two short-term trade-offs documented (users + households SELECT use `true` for authenticated — see TODOs in schema). |
 | 10 | ~~View History screen~~ | ✅ Done | Feed History modal redesigned to match Dan's Figma. iOS shadow fixed. `StatusScreen.tsx` v3.10.3. |
 | I11 | Adding a new household | 🟡 Medium | Household island button to add a new household via invitation code (e.g. pet sitter scenario). |
 | 11 | New one | 🔴 Major | Pro mode does not have the upgrade to pro over the feed events on the status screen |
@@ -167,9 +167,9 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 - [x] **UI Polish** — StatusScreen card + button spacing batch (v3.10.10). statusCard padding split + reduced, statusLabel gap tightened, timeText enlarged, petCheckboxContainer tuned, feedButtonContainer margin reduced. 14 Mar.
 - [x] **UI Polish** — HistoryModal header tokens (v3.10.11). Raw values replaced with `modalHeaderStyles` + `spacing` theme tokens. 14 Mar.
 - [x] **UI Polish** — Header consistency across all screens (globalStyles v1.2.0, SettingsScreen v3.16.0, FeedRemindersModal v2.2.0, LegalModal v2.3.0). All modal/sheet headers left-aligned. `modalHeaderSpacer` removed. 14 Mar.
-- [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE
+- [ ] **#2** — Native push notifications (EAS Build setup session) ← START HERE (was #2 before, now next after #9)
 - [ ] **#7** — How to section update
-- [ ] **#9** — Supabase RLS
+- [x] **#9** — Supabase RLS. RLS enabled all 8 tables, legacy policies cleaned, recursion bug fixed, D1 + D15 resolved. `DatabaseSchema.sql` v1.3.0. 15 Mar.
 - [ ] **Phase B:** OS-level reminder scheduling (`expo-notifications`), Apple/Google OAuth, React Navigation, production build prep
 
 ---
@@ -178,7 +178,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 
 | # | Item | When to Fix |
 |---|------|-------------|
-| D1 | RLS policies disabled — unrestricted DB access via anon key | Before launch (#9 in priority list) |
+| ~~D1~~ | ~~RLS policies disabled — unrestricted DB access via anon key~~ | ✅ Resolved 15 Mar — see #9 |
 | D2 | Email verification disabled in Supabase dashboard | Before launch |
 | D3 | Expo Go deep linking limitations — invite email link leads to blank page | Before production build |
 | D4 | Optimistic UI has no offline queue — failed syncs roll back silently | Post-MVP |
@@ -192,7 +192,7 @@ All previously logged bugs (1–8, 10–18) resolved. See Compass for full resol
 | D12 | Reminder times stored as `HH:mm` text matched in UTC — users in non-UTC timezones will see reminders fire at wrong local time | Before launch |
 | D13 | pg_cron service role JWT hardcoded in cron job SQL command — rotate this when rotating the service role key (D6) | Before launch |
 | D14 | `receives_reminders` column on `user_households` is now unused — all reminder muting uses `reminders.enabled` instead | Before launch |
-| D15 | RLS INSERT and DELETE policies on `reminders` table still allow any household member — should be admin-only (`is_main_member = true`) | Before launch |
+| ~~D15~~ | ~~RLS INSERT and DELETE policies on `reminders` table still allow any household member — should be admin-only~~ | ✅ Resolved 15 Mar — see #9 |
 
 ---
 
