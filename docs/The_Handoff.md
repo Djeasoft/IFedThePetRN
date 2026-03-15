@@ -1,7 +1,7 @@
 # I Fed The Pet (IFTP) — The Handoff
 **Last Updated:** Sunday, 15 March 2026
 **Updated By:** Jarques + Claude (session sign-off)
-**Next Session:** Pick up from WHAT'S NEXT — #2 Native push notifications is highest priority. #9 Supabase RLS complete (D1 + D15 resolved, 15 Mar). All headers now left-aligned across StatusScreen, SettingsScreen, FeedRemindersModal, LegalModal (v3.10.11, v3.16.0, v2.2.0, v2.3.0). StatusScreen UI polish complete through v3.10.11. globalStyles v1.2.0 (left-aligned shared header pattern).
+**Next Session:** Pick up from WHAT'S NEXT — **#2 Native push notifications (EAS Build)** is the only remaining major blocker. #9 RLS fully done (D1 + D15 resolved, 15 Mar). RLS rules to remember: run helper functions first; never raw-subquery user_households inside a user_households policy — use is_household_member(). Two TODOs in DatabaseSchema.sql (users + households SELECT=true, tighten when calls move to Edge Functions).
 
 ---
 
